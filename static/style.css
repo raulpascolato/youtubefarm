@@ -1,0 +1,416 @@
+/* YOUTUBE FARM — visual iOS (grouped lists, sheets, tab bar) */
+
+:root{
+  --bg:#F2F2F7;
+  --card:#FFFFFF;
+  --sep:rgba(60,60,67,.14);
+  --txt:#000000;
+  --txt2:rgba(60,60,67,.6);
+  --txt3:rgba(60,60,67,.3);
+  --tint:#007AFF;
+  --red:#FF3B30;
+  --green:#34C759;
+  --orange:#FF9500;
+  --nav-bg:#FFFFFF;
+  --sombra:0 1px 2px rgba(0,0,0,.04);
+  --raio:12px;
+  --tb:30px;              /* altura da barra de titulo propria */
+  --tab-h:63px;           /* altura das abas — usada tambem pela area de rolagem */
+  --nav-h:46px;           /* altura da barra de navegacao */
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#000000;
+    --card:#1C1C1E;
+    --sep:rgba(84,84,88,.5);
+    --txt:#FFFFFF;
+    --txt2:rgba(235,235,245,.6);
+    --txt3:rgba(235,235,245,.3);
+    --nav-bg:#1C1C1E;
+    --sombra:none;
+  }
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif;
+  font-size:17px;
+  line-height:1.4;
+  -webkit-font-smoothing:antialiased;
+  height:100vh;
+  overflow:hidden;          /* a pagina nao rola; quem rola e' .rolagem */
+}
+
+/* Area de rolagem entre as duas barras fixas. Antes quem rolava era a pagina inteira,
+   entao a barra de rolagem ia de 0 a 100% da janela e cortava um corredor de 7px por
+   cima da barra de titulo e por baixo das abas. */
+.rolagem{
+  position:fixed;left:0;right:0;top:calc(var(--tb) + var(--nav-h));bottom:var(--tab-h);
+  overflow-y:auto;overflow-x:hidden;
+  /* o espaco da barra fica reservado mesmo quando ela nao aparece. Sem isso, toda
+     troca de tela pisca: a barra surge, o conteudo encolhe 7px, ela some e volta. */
+  scrollbar-gutter:stable;
+  display:flex;flex-direction:column;
+}
+
+/* ---------- barra de titulo propria (janela sem borda) ---------- */
+.titlebar{
+  position:fixed;top:0;left:0;right:0;height:var(--tb);z-index:80;
+  display:flex;align-items:stretch;
+  background:var(--nav-bg);
+  border-bottom:.5px solid var(--sep);
+  user-select:none;
+}
+.tb-drag{flex:1;display:flex;align-items:center;padding-left:13px;cursor:default}
+.tb-drag span{
+  font-size:11px;font-weight:600;letter-spacing:.9px;color:var(--txt2);
+  text-transform:uppercase;
+}
+.tb-botoes{display:flex;align-items:stretch}
+.tb-btn{
+  width:38px;background:none;border:0;cursor:pointer;color:var(--txt2);
+  display:flex;align-items:center;justify-content:center;
+}
+.tb-btn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round}
+.tb-btn:hover{background:var(--sep);color:var(--txt)}
+.tb-btn.fechar:hover{background:#E81123;color:#fff}
+button,input,select,textarea{font:inherit;color:inherit}
+code{
+  font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  font-size:.86em;background:var(--sep);padding:1px 5px;border-radius:5px;
+}
+
+/* a barra de rolagem padrao do Windows e' branca e larga — destoa de tudo aqui.
+   Fina, discreta e na cor do tema, estilo iOS. */
+/* barra de rolagem escondida: qualquer largura que ela tenha rouba espaco da
+   direita e abre aquela faixa ao lado das barras. Rolar com a roda continua igual. */
+*::-webkit-scrollbar{width:7px;height:7px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--txt3);border-radius:4px}
+*::-webkit-scrollbar-thumb:hover{background:var(--txt2)}
+*::-webkit-scrollbar-corner{background:transparent}
+
+.app{max-width:680px;margin:0 auto;width:100%;flex:1 0 auto;
+     display:flex;flex-direction:column}
+.view{display:none}
+.view.ativo{display:block;flex:1 0 auto;animation:entra .22s ease}
+/* só opacidade: com transform, a view vira referência para os filhos position:fixed —
+   a barra de navegação se soltava e deslizava junto durante os 0,22s da animação */
+@keyframes entra{from{opacity:0}to{opacity:1}}
+
+/* ---------- nav ---------- */
+.nav{
+  /* fixa e fora da area que rola: dentro dela a nav ficaria 7px mais estreita que a
+     janela (a largura da barra de rolagem) e abriria aquela faixa na direita */
+  position:fixed;top:var(--tb);left:0;right:0;z-index:40;
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  gap:8px;height:var(--nav-h);padding:0 8px;
+  background:var(--nav-bg);
+  border-bottom:.5px solid var(--sep);
+}
+.nav-left{justify-self:start}
+.nav-right{justify-self:end}
+.nav-title{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:44vw}
+.icon-btn{
+  background:none;border:0;color:var(--tint);font-size:27px;font-weight:300;
+  line-height:1;width:40px;height:40px;border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.icon-btn:active{background:var(--sep)}
+.back{
+  background:none;border:0;color:var(--tint);cursor:pointer;
+  font-size:17px;padding:6px 8px 6px 2px;display:flex;align-items:center;gap:3px;
+}
+.back::before{content:"";width:9px;height:9px;border-left:2.2px solid var(--tint);border-bottom:2.2px solid var(--tint);transform:rotate(45deg);margin-right:2px;border-radius:1px}
+.back:active{opacity:.4}
+
+.large-title{font-size:34px;font-weight:700;letter-spacing:-.6px;margin:14px 20px 4px}
+.passo{color:var(--txt3);font-size:14px;padding-right:8px}
+.btn.grande{padding:17px 16px;font-size:18px}
+.sub{color:var(--txt2);font-size:15px;margin:0 20px 14px}
+.pad{padding:10px 16px}
+
+/* ---------- listas agrupadas ---------- */
+.group-label{
+  font-size:13px;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;
+  margin:26px 20px 7px;font-weight:500;
+}
+.group-nota{font-size:13px;color:var(--txt2);margin:7px 20px 0;line-height:1.35}
+
+/* tabelinha de referencia: quanto texto da quantos minutos */
+.tabela-ref{margin:10px 20px 0;font-size:13px;color:var(--txt3)}
+.tabela-ref div{display:flex;justify-content:space-between;padding:2px 0}
+.tabela-ref div+div{border-top:.5px solid var(--sep)}
+.tabela-ref span{font-variant-numeric:tabular-nums}
+.tabela-ref div.aceso{color:var(--tint);font-weight:600}
+.tabela-ref .cabeca{
+  text-transform:uppercase;letter-spacing:.5px;font-size:11px;
+  border-top:0;padding-bottom:5px;
+}
+.group{
+  background:var(--card);border-radius:var(--raio);margin:0 16px;overflow:hidden;
+  box-shadow:var(--sombra);
+}
+/* dois cards seguidos sem rotulo entre eles (ex: arquivos + video pronto) ficavam
+   colados. O rotulo de secao da 26px, que aqui e' demais: sao cards irmaos. */
+.group + .group{margin-top:12px}
+.row{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 16px;min-height:47px;
+  border-bottom:.5px solid var(--sep);
+  position:relative;background:none;border-left:0;border-right:0;border-top:0;
+  width:100%;text-align:left;
+}
+.row:last-child{border-bottom:0}
+button.row{cursor:pointer}
+button.row:active{background:var(--sep)}
+.row-corpo{flex:1;min-width:0}
+.row-titulo{font-size:17px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-sub{font-size:13px;color:var(--txt2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chevron{width:8px;height:8px;border-top:2px solid var(--txt3);border-right:2px solid var(--txt3);transform:rotate(45deg);flex:none;border-radius:1px}
+.row-valor{color:var(--txt2);font-size:15px;flex:none}
+/* valor que ocupa o resto da linha e corta com reticencia — nome de voz e' comprido */
+.row-valor.crescivel{
+  flex:1;text-align:right;font-size:17px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.row-valor.vazio-valor{color:var(--txt3)}
+
+.vazio{
+  text-align:center;color:var(--txt2);font-size:15px;
+  padding:40px 30px;line-height:1.5;
+}
+
+/* a tela do canal ocupa a altura toda: a lista cresce, o "apagar" cola embaixo
+   e o estado vazio fica centralizado no espaco que sobra */
+#view-canal.ativo{display:flex;flex-direction:column}
+#lista-videos{flex:1;display:flex;flex-direction:column}
+#lista-videos .vazio{margin:auto}
+.pad.rodape{margin-top:auto}
+
+/* ---------- avatar do canal ---------- */
+.av{
+  width:38px;height:38px;border-radius:10px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:600;font-size:16px;color:#fff;letter-spacing:-.3px;
+  background:linear-gradient(160deg,#007AFF,#0055D4);
+}
+
+/* ---------- botoes ---------- */
+.btn{
+  width:100%;background:var(--tint);color:#fff;border:0;border-radius:var(--raio);
+  padding:13px 16px;font-size:17px;font-weight:600;cursor:pointer;
+}
+.btn:active{filter:brightness(.9)}
+.btn.secundario{background:var(--card);color:var(--tint);box-shadow:var(--sombra)}
+.btn.destrutivo{background:var(--card);color:var(--red);box-shadow:var(--sombra)}
+
+/* ---------- campos ---------- */
+.field{gap:10px}
+.field-nome{flex:none;color:var(--txt);font-size:17px}
+/* texto sempre a esquerda: o placeholder e o que voce digita tem que nascer no MESMO
+   lugar, senao o valor pula pro canto oposto assim que voce comeca a escrever.
+   (o <select> continua a direita — ali e' valor escolhido, nao campo de digitar) */
+.field input,.field select,.field textarea{
+  flex:1;min-width:0;background:none;border:0;outline:none;
+  font-size:17px;text-align:left;padding:0;
+}
+.field input::placeholder{color:var(--txt3)}
+.field select{
+  text-align:right;text-align-last:right;-webkit-appearance:none;appearance:none;
+  color:var(--tint);cursor:pointer;padding-right:14px;
+  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='rgb(142,142,147)' stroke-width='1.8' stroke-linecap='round'/></svg>") no-repeat right center;
+}
+.field textarea{resize:vertical;min-height:88px;line-height:1.45;text-align:left}
+
+/* ---------- vozes ---------- */
+.busca{
+  width:100%;background:var(--card);border:0;outline:none;border-radius:10px;
+  padding:10px 14px;font-size:17px;box-shadow:var(--sombra);
+}
+.busca::placeholder{color:var(--txt3)}
+.play{
+  width:34px;height:34px;flex:none;border:0;border-radius:50%;cursor:pointer;
+  background:var(--sep);color:var(--tint);font-size:12px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
+.play:active{filter:brightness(.85)}
+.btn-mini{
+  flex:none;border:0;background:none;color:var(--tint);cursor:pointer;
+  font-size:15px;font-weight:500;padding:6px 2px;
+}
+.row.escolhida{background:rgba(0,122,255,.10)}
+.paginacao{
+  display:flex;align-items:center;justify-content:center;gap:16px;
+  margin:14px 16px 0;color:var(--txt2);font-size:15px;
+}
+.paginacao button{
+  width:38px;height:34px;border:0;border-radius:9px;cursor:pointer;
+  background:var(--card);color:var(--tint);font-size:19px;line-height:1;
+  box-shadow:var(--sombra);
+}
+.paginacao button:disabled{color:var(--txt3);cursor:default}
+.paginacao button:not(:disabled):active{filter:brightness(.88)}
+.row .row-corpo{cursor:pointer}
+audio.player{width:100%;height:34px}
+
+/* ---------- segmented control (duracao) ---------- */
+.segmented{
+  display:flex;gap:2px;margin:0 16px;padding:2px;
+  background:var(--sep);border-radius:9px;
+}
+.seg{
+  flex:1;border:0;background:none;color:var(--txt);cursor:pointer;
+  font-size:15px;font-weight:500;padding:7px 0;border-radius:7px;
+  transition:background .15s;
+}
+.seg.ativo{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600}
+
+.arquivo-btn{
+  display:block;width:100%;text-align:center;background:var(--card);color:var(--tint);
+  border:0;border-radius:var(--raio);padding:13px;font-size:17px;cursor:pointer;
+  box-shadow:var(--sombra);
+}
+.arquivo-btn.ok{color:var(--green)}
+
+/* ---------- badges / estado ---------- */
+.badge{
+  font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;flex:none;
+  letter-spacing:.2px;
+}
+.badge.gerando{background:rgba(255,149,0,.16);color:var(--orange)}
+.badge.pronto{background:rgba(52,199,89,.16);color:var(--green)}
+.badge.erro{background:rgba(255,59,48,.16);color:var(--red)}
+
+.spinner{
+  width:15px;height:15px;flex:none;border-radius:50%;
+  border:2px solid var(--sep);border-top-color:var(--orange);
+  animation:gira .7s linear infinite;
+}
+@keyframes gira{to{transform:rotate(360deg)}}
+
+/* ---------- roteiro ---------- */
+.roteiro{
+  background:var(--card);border-radius:var(--raio);margin:0 16px;padding:20px;
+  white-space:pre-wrap;word-wrap:break-word;
+  font-size:16.5px;line-height:1.62;box-shadow:var(--sombra);
+}
+.roteiro.parcial::after{
+  content:"";display:inline-block;width:8px;height:18px;vertical-align:-3px;
+  background:var(--tint);margin-left:2px;border-radius:1px;animation:pisca 1s steps(2) infinite;
+}
+@keyframes pisca{50%{opacity:0}}
+.acoes{display:flex;gap:10px;padding:14px 16px}
+.acoes .btn{flex:1}
+.caixa-aviso{
+  background:rgba(255,149,0,.12);color:var(--orange);border-radius:var(--raio);
+  margin:0 16px 4px;padding:14px 16px;font-size:15px;line-height:1.45;
+}
+.field input[type=color]{
+  flex:none;width:46px;height:28px;padding:0;border:0;background:none;cursor:pointer;
+  margin-left:auto;
+}
+.caixa-erro{
+  background:rgba(255,59,48,.1);color:var(--red);border-radius:var(--raio);
+  margin:0 16px;padding:14px 16px;font-size:15px;line-height:1.45;
+}
+
+/* ---------- tab bar ---------- */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;height:var(--tab-h);
+  display:flex;justify-content:center;gap:10px;
+  padding:6px 0 max(6px,env(safe-area-inset-bottom));
+  background:var(--nav-bg);
+  border-top:.5px solid var(--sep);
+}
+.tab{
+  background:none;border:0;cursor:pointer;color:var(--txt3);
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:4px 22px;font-size:10.5px;font-weight:500;letter-spacing:.1px;
+}
+.tab svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.ativo{color:var(--tint)}
+
+/* ---------- sheet ---------- */
+.backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:60;
+  opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.backdrop.aberto{opacity:1;pointer-events:auto}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:70;
+  max-width:680px;margin:0 auto;
+  background:var(--bg);border-radius:14px 14px 0 0;
+  transform:translateY(101%);transition:transform .3s cubic-bezier(.32,.72,0,1);
+  max-height:88vh;display:flex;flex-direction:column;
+  box-shadow:0 -8px 40px rgba(0,0,0,.18);
+}
+.sheet.aberto{transform:none}
+.sheet-nav{
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  padding:12px 16px;border-bottom:.5px solid var(--sep);flex:none;
+}
+.sheet-titulo{font-size:17px;font-weight:600}
+.sheet-cancel,.sheet-ok{background:none;border:0;color:var(--tint);cursor:pointer;font-size:17px}
+.sheet-cancel{justify-self:start}
+.sheet-ok{justify-self:end;font-weight:600}
+.sheet-ok[disabled]{color:var(--txt3);cursor:default}
+.sheet-corpo{overflow-y:auto;padding:4px 0 26px}
+.sheet-corpo .group{margin-top:0}
+.sheet-corpo .group-label:first-child{margin-top:18px}
+
+/* ---------- alerta proprio ---------- */
+.nav-acao{background:none;border:0;color:var(--tint);cursor:pointer;font-size:17px;padding:6px 8px}
+.nav-acao:active{opacity:.4}
+
+.alerta-fundo{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:95;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.alerta-fundo.aberto{opacity:1;pointer-events:auto}
+.alerta{
+  position:fixed;left:50%;top:50%;z-index:96;width:272px;
+  transform:translate(-50%,-50%) scale(1.12);opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;
+  background:var(--card);border-radius:14px;overflow:hidden;
+  box-shadow:0 10px 50px rgba(0,0,0,.4);
+}
+.alerta.aberto{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+.alerta-topo{padding:19px 16px 15px;text-align:center}
+.alerta-titulo{font-size:17px;font-weight:600}
+.alerta-texto{font-size:13px;color:var(--txt2);margin-top:4px;line-height:1.35}
+.alerta-botoes{display:flex;border-top:.5px solid var(--sep)}
+.alerta-botoes button{
+  flex:1;background:none;border:0;padding:12px 8px;font-size:17px;
+  color:var(--tint);cursor:pointer;
+}
+.alerta-botoes button+button{border-left:.5px solid var(--sep)}
+.alerta-botoes button:active{background:var(--sep)}
+.alerta-botoes button.perigo{color:var(--red);font-weight:600}
+
+/* ---------- menu do botao direito ---------- */
+.menu-ctx{
+  position:fixed;z-index:97;display:none;min-width:186px;overflow:hidden;
+  background:var(--card);border-radius:12px;
+  box-shadow:0 8px 34px rgba(0,0,0,.45);
+}
+.menu-ctx.aberto{display:block}
+.menu-ctx button{
+  display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;
+  padding:12px 16px;font-size:16px;color:var(--txt);
+}
+.menu-ctx button+button{border-top:.5px solid var(--sep)}
+.menu-ctx button:hover{background:var(--sep)}
+.menu-ctx button.perigo{color:var(--red)}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;left:50%;bottom:104px;transform:translate(-50%,14px);
+  background:rgba(28,28,30,.95);color:#fff;padding:11px 20px;border-radius:22px;
+  font-size:15px;z-index:90;opacity:0;pointer-events:none;transition:all .25s;
+  max-width:82vw;text-align:center;backdrop-filter:blur(10px);
+}
+.toast.aberto{opacity:1;transform:translate(-50%,0)}

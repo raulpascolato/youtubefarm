@@ -1,0 +1,5 @@
+anthropic>=1.2
+fastapi>=0.110
+uvicorn>=0.29
+pywebview>=5.0
+pillow>=10.0

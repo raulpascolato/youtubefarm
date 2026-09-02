@@ -1,0 +1,45 @@
+como fazer funcionar
+
+
+1. python
+
+se voce nao tem, baixa em python.org/downloads
+na primeira tela do instalador, marca a caixinha "add python to path"
+se esquecer disso nada funciona
+
+
+2. ffmpeg
+
+baixa o "ffmpeg-release-essentials.zip" em gyan.dev/ffmpeg/builds
+abre o zip, entra na pasta bin la dentro e pega so o ffmpeg.exe
+aqui na pasta do youtube farm, cria uma pasta chamada bin e cola ele dentro
+
+tem que ficar assim:  bin\ffmpeg.exe
+
+
+3. abrir
+
+dois cliques no "youtube farm.bat"
+na primeira vez abre uma janela preta instalando coisa, leva 1 ou 2 minutos
+nao fecha essa janela. depois disso ele abre direto
+
+
+4. as chaves
+
+abre o app, vai em ajustes e cola as duas:
+
+  claude       console.anthropic.com  (settings > api keys)
+  darkplanner  app.darkplanner.com.br
+
+sem a do claude ele nao escreve roteiro
+sem a do darkplanner ele nao gera a voz
+
+
+se der errado
+
+  "python nao encontrado"   voce esqueceu de marcar "add python to path"
+                            desinstala o python e instala de novo marcando
+
+  nao monta o video         o ffmpeg nao esta em bin\ffmpeg.exe
+
+  nao abre nada             procura um erro.txt aqui na pasta, ele diz o motivo

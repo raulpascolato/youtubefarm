@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YOUTUBE FARM</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- moldura propria: a do Windows foi desligada (frameless) -->
+<div class="titlebar">
+  <div class="tb-drag pywebview-drag-region"><span>YOUTUBE FARM</span></div>
+  <div class="tb-botoes">
+    <button class="tb-btn" id="tb-min" title="Minimizar">
+      <svg viewBox="0 0 12 12"><path d="M2.5 6h7"/></svg>
+    </button>
+    <button class="tb-btn fechar" id="tb-close" title="Fechar">
+      <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- o conteúdo rola AQUI DENTRO, não na página: assim a barra de rolagem nasce
+     abaixo da barra de título e morre acima das abas, sem cortá-las -->
+<div class="rolagem" id="rolagem">
+<div class="app">
+
+  <!-- ================= CANAIS ================= -->
+  <section class="view" id="view-canais">
+    <header class="nav">
+      <div class="nav-left"></div>
+      <div class="nav-title"></div>
+      <div class="nav-right"><button class="icon-btn" data-act="novo-canal" title="Novo canal">+</button></div>
+    </header>
+    <h1 class="large-title">Canais</h1>
+    <div id="lista-canais"></div>
+  </section>
+
+  <!-- ================= CANAL ================= -->
+  <section class="view" id="view-canal">
+    <header class="nav">
+      <div class="nav-left"><button class="back" data-go="canais">Canais</button></div>
+      <div class="nav-title" id="canal-nav-titulo"></div>
+      <div class="nav-right"><button class="nav-acao" data-act="editar-canal">Editar</button></div>
+    </header>
+    <h1 class="large-title" id="canal-titulo"></h1>
+    <div class="pad">
+      <button class="btn" data-act="novo-video">Criar vídeo</button>
+    </div>
+    <div id="lista-videos"></div>
+    <div class="pad rodape">
+      <button class="btn destrutivo" data-act="apagar-canal">Apagar canal</button>
+    </div>
+  </section>
+
+  <!-- ================= VIDEO ================= -->
+  <section class="view" id="view-video">
+    <header class="nav">
+      <div class="nav-left"><button class="back" id="video-back">Canal</button></div>
+      <div class="nav-title" id="video-etapa-nome"></div>
+      <div class="nav-right"><span class="passo" id="video-passo"></span></div>
+    </header>
+    <h1 class="large-title" id="video-titulo"></h1>
+    <p class="sub" id="video-sub"></p>
+    <div id="video-corpo"></div>
+  </section>
+
+  <!-- ================= VOZES ================= -->
+  <section class="view" id="view-vozes">
+    <header class="nav">
+      <div class="nav-left"><button class="back" id="vozes-back">Canal</button></div>
+      <div class="nav-title">Voz do canal</div>
+      <div class="nav-right"></div>
+    </header>
+    <h1 class="large-title">Voz</h1>
+    <div class="pad">
+      <input class="busca" id="voz-q" placeholder="Buscar pelo nome" autocomplete="off">
+    </div>
+    <div class="segmented" id="voz-genero">
+      <button class="seg ativo" data-v="">Todas</button>
+      <button class="seg" data-v="male">Masculinas</button>
+      <button class="seg" data-v="female">Femininas</button>
+    </div>
+    <div id="lista-vozes"></div>
+  </section>
+
+  <!-- ================= MODELOS ================= -->
+  <section class="view" id="view-modelos">
+    <header class="nav">
+      <div class="nav-left"></div>
+      <div class="nav-title"></div>
+      <div class="nav-right"><button class="icon-btn" data-act="novo-modelo" title="Novo modelo">+</button></div>
+    </header>
+    <h1 class="large-title">Modelos</h1>
+    <p class="sub">Cada modelo é um arquivo com roteiros do canal. O roteiro novo é
+       escrito imitando esses.</p>
+    <div id="lista-modelos"></div>
+  </section>
+
+  <!-- ================= AJUSTES ================= -->
+  <section class="view" id="view-ajustes">
+    <header class="nav">
+      <div class="nav-left"></div>
+      <div class="nav-title"></div>
+      <div class="nav-right"></div>
+    </header>
+    <h1 class="large-title">Ajustes</h1>
+    <div class="group-label">Chave da API do Claude</div>
+    <div class="group">
+      <label class="row field">
+        <input id="cfg-key" type="password" placeholder="sk-ant-..." autocomplete="off">
+      </label>
+    </div>
+
+    <div class="group-label">Chave do DarkPlanner (voz)</div>
+    <div class="group">
+      <label class="row field">
+        <input id="cfg-dpkey" type="password" placeholder="dpk_..." autocomplete="off">
+      </label>
+    </div>
+
+    <div class="group-label">Modelo</div>
+    <div class="group">
+      <label class="row field">
+        <span class="field-nome">Modelo</span>
+        <select id="cfg-modelo">
+          <option value="claude-opus-5">Claude Opus 5</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+        </select>
+      </label>
+    </div>
+    <div class="pad"><button class="btn" data-act="salvar-cfg">Salvar</button></div>
+
+    <div class="group-label">Atualização</div>
+    <div class="group">
+      <button class="row" id="btn-atualizar" onclick="verificarAtualizacao()">
+        <div class="row-corpo">
+          <div class="row-titulo">Verificar atualização</div>
+          <div class="row-sub" id="upd-sub">—</div>
+        </div>
+        <div class="row-valor" id="upd-valor">buscar</div>
+      </button>
+    </div>
+    <div class="group-nota" id="upd-notas"></div>
+  </section>
+
+</div>
+</div>
+
+<!-- ================= TAB BAR ================= -->
+<nav class="tabbar">
+  <button class="tab ativo" data-tab="canais">
+    <svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="4"/><path d="M10 9.2l5.2 2.8L10 14.8z" fill="currentColor" stroke="none"/></svg>
+    <span>Canais</span>
+  </button>
+  <button class="tab" data-tab="modelos">
+    <svg viewBox="0 0 24 24"><path d="M5 3.5h9l5 5v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1z"/><path d="M13.5 3.7V9h5.3"/></svg>
+    <span>Modelos</span>
+  </button>
+  <button class="tab" data-tab="ajustes">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"/></svg>
+    <span>Ajustes</span>
+  </button>
+</nav>
+
+<!-- ================= SHEET ================= -->
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-nav">
+    <button class="sheet-cancel" id="sheet-cancel">Cancelar</button>
+    <div class="sheet-titulo" id="sheet-titulo"></div>
+    <button class="sheet-ok" id="sheet-ok">OK</button>
+  </div>
+  <div class="sheet-corpo" id="sheet-corpo"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<audio id="player"></audio>
+<div class="menu-ctx" id="menu-ctx"></div>
+
+<!-- confirmação própria: o confirm() do navegador mostra "127.0.0.1:8777 diz" -->
+<div class="alerta-fundo" id="alerta-fundo"></div>
+<div class="alerta" id="alerta">
+  <div class="alerta-topo">
+    <div class="alerta-titulo" id="alerta-titulo"></div>
+    <div class="alerta-texto" id="alerta-texto"></div>
+  </div>
+  <div class="alerta-botoes">
+    <button id="alerta-nao">Cancelar</button>
+    <button id="alerta-sim">OK</button>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
