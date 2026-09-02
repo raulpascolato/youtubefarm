@@ -25,8 +25,11 @@ SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 # encaixa qualquer proporcao em 1920x1080 sem distorcer, com barra preta se precisar
 FIT = (f"scale={L}:{A}:force_original_aspect_ratio=decrease,"
-       f"pad={L}:{A}:(ow-iw)/2:(oh-ih)/2,fps={FPS},setsar=1")
-X264 = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-r", str(FPS)]
+       f"pad={L}:{A}:(ow-iw)/2:(oh-ih)/2,fps={FPS},format=yuv420p,setsar=1")
+# color_range tv: sem isso o bloco de imagem sai yuvj420p (faixa cheia, herdada do
+# JPEG) e o do avatar sai yuv420p (faixa de TV). Na troca aparece um pulo de brilho.
+X264 = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        "-color_range", "tv", "-r", str(FPS)]
 
 # Sem dissolvencia. Ela colava o ULTIMO QUADRO do bloco anterior, parado, por cima
 # do proximo durante 0.4s — e um quadro parado no meio de um zoom parece que a
@@ -61,7 +64,7 @@ def _kenburns(dur, variacao):
 
     Quatro variacoes: o lado troca a cada imagem, entrar/sair a cada duas.
     """
-    q = max(2, int(round(dur * FPS)))
+    q = quadros(dur)
     alcance = min(ZOOM_TETO, TAXA_ZOOM ** dur)      # quanto fecha neste bloco
     anda = TAXA_PAN * dur                           # quanto o centro caminha
     # O LADO alterna a cada imagem — direita, esquerda, direita… — que e' o que se
@@ -86,7 +89,7 @@ def _kenburns(dur, variacao):
              f"x2='{x0}':y2='{y1}':x3='{x1}':y3='{y1}':"
              f"interpolation=cubic:sense=source:eval=frame")
     return q, (f"scale={L}:{A}:force_original_aspect_ratio=increase,"
-               f"crop={L}:{A},{persp},setsar=1")
+               f"crop={L}:{A},{persp},format=yuv420p,setsar=1")
 
 
 def importar_broll(pasta_dark, pasta_broll, destino):
@@ -139,11 +142,22 @@ def _achar(clipes, n):
 
 
 # ------------------------------------------------------------------ segmentos
+def quadros(dur):
+    """Quantos quadros um bloco tem. TODO segmento passa por aqui.
+
+    Existe porque antes cada tipo cortava do seu jeito: a imagem por -frames:v (exato)
+    e o avatar/clipe por -t (o ffmpeg arredonda por conta dele). Os dois discordavam de
+    1 quadro de vez em quando, e isso ACUMULAVA — medido no video de 17min, os cortes
+    caiam 0,30s a 0,36s atrasados la' pelos 8 minutos, e o avatar dessincronizava.
+    """
+    return max(2, int(round(dur * FPS)))
+
+
 def seg_avatar(avatar, inicio, dur, saida):
     # -ss ANTES do -i: o ffmpeg pula direto pro ponto em vez de decodificar o arquivo
     # inteiro desde o comeco. Com re-encode continua no frame exato, e o lip-sync bate.
-    _run(["-ss", f"{inicio:.3f}", "-i", str(avatar), "-t", f"{dur:.3f}",
-          "-an", "-vf", FIT, *X264, str(saida)])
+    _run(["-ss", f"{inicio:.3f}", "-i", str(avatar), "-an", "-vf", FIT,
+          "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 
 def seg_imagem(img, dur, saida, variacao=0):
@@ -156,8 +170,8 @@ def seg_imagem(img, dur, saida, variacao=0):
 
 def seg_video(clipe, dur, saida):
     # -stream_loop repete o clipe se ele for mais curto que o bloco
-    _run(["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", str(clipe),
-          "-an", "-vf", FIT, *X264, str(saida)])
+    _run(["-stream_loop", "-1", "-i", str(clipe), "-an", "-vf", FIT,
+          "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 
 def seg_card(camadas, dur, saida):
@@ -172,7 +186,8 @@ def seg_card(camadas, dur, saida):
     _run(["-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["fundo"],
           "-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["capa"],
           "-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["texto"],
-          "-filter_complex", ";".join(fc), "-map", "[v]", *X264, str(saida)])
+          "-filter_complex", ";".join(fc), "-map", "[v]",
+          "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 
 # ------------------------------------------------------------------ montagem
@@ -215,14 +230,18 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
     tarefas, faltaram, variacao = [], 0, 0
     for i, b in enumerate(plano):
         n, tipo = b["n"], b["tipo"]
-        # A duracao NAO e' b["dur"]. O SRT marca so' onde ha' fala, e entre um bloco e
-        # o proximo sobra a pausa da respiracao. Somadas, essas pausas davam 38s num
-        # video de 16min: a imagem terminava antes do audio e o avatar dessincronizava
-        # (1s de atraso ja' no bloco 4). Cada bloco vai ate' onde o proximo comeca.
-        if i + 1 < len(plano):
-            dur = float(plano[i + 1]["start"]) - float(b["start"])
-        else:
-            dur = float(b["end"]) - float(b["start"])
+        # Cada bloco vai de onde ele comeca ate' onde o PROXIMO comeca. A duracao nao
+        # e' b["dur"]: o SRT marca so' onde ha' fala, e entre um bloco e o outro sobra
+        # a pausa da respiracao. Somadas davam 38s num video de 16min, e a imagem
+        # acabava antes do audio.
+        #
+        # E o numero de quadros sai da POSICAO ABSOLUTA, nao da duracao. Arredondar
+        # cada duracao separadamente empurrava sempre pro mesmo lado e o erro somava:
+        # medido, 0,63s de atraso no fim do video. Assim o corte do bloco i cai sempre
+        # em round(start*30) quadros, e um erro nunca passa pro bloco seguinte.
+        fim = float(plano[i + 1]["start"]) if i + 1 < len(plano) else float(b["end"])
+        q = max(2, round(fim * FPS) - round(float(b["start"]) * FPS))
+        dur = q / FPS
         t = {"n": n, "dur": dur, "seg": tmp / f"seg_{n:03d}.mp4",
              "start": b["start"], "arquivo": None, "imagem": False, "variacao": 0}
         if tipo == "card" and camadas:

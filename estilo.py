@@ -19,7 +19,7 @@ import re
 # Share por bloco. Nao e' mais o do video de referencia (15/62/22): com aquilo o video
 # virava enxurrada de imagem, uma por frase, e a maioria nao dizia nada. O avatar passou
 # a ser o padrao e a imagem so' entra quando ganha o lugar.
-MISTURA = {"avatar": 0.450, "imagem": 0.400, "video": 0.150}
+MISTURA = {"avatar": 0.300, "imagem": 0.550, "video": 0.150}
 
 # quantos b-rolls seguidos entre uma aparicao do avatar e a proxima (mediana medida: 4)
 BROLLS_ENTRE_AVATARES = 4
