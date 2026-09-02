@@ -1,0 +1,13 @@
+# o ffmpeg tem 98 MB e o GitHub corta em 100 MB por arquivo.
+# Quem baixar o repo copia o bin/ da sua pasta, ou baixa o ffmpeg e poe aqui.
+bin/
+
+# seus dados: chaves da API, canais, vídeos, presets e capas
+data/
+
+__pycache__/
+*.pyc
+erro.txt
+
+# cache do lancador: caminho do pythonw desta maquina
+.pronto

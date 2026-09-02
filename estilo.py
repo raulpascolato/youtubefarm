@@ -19,7 +19,7 @@ import re
 # Share por bloco. Nao e' mais o do video de referencia (15/62/22): com aquilo o video
 # virava enxurrada de imagem, uma por frase, e a maioria nao dizia nada. O avatar passou
 # a ser o padrao e a imagem so' entra quando ganha o lugar.
-MISTURA = {"avatar": 0.300, "imagem": 0.550, "video": 0.150}
+MISTURA = {"avatar": 0.460, "imagem": 0.400, "video": 0.140}
 
 # quantos b-rolls seguidos entre uma aparicao do avatar e a proxima (mediana medida: 4)
 BROLLS_ENTRE_AVATARES = 4
@@ -92,18 +92,19 @@ REGRAS = [
     "UM SUJEITO SO'. Nomeie A COISA e, no maximo, a superficie embaixo dela. Nao "
     "descreva o comodo, o que esta' ao fundo, ao lado, nem uma prateleira cheia. "
     "Expandir a cena e' o que deixou a 1a leva toda parecida.",
-    "A IMAGEM PRECISA GANHAR O LUGAR DELA. O padrao e' o AVATAR. So' troque por "
-    "imagem quando VER acrescenta ao que esta' sendo dito — quando a coisa e' o "
-    "assunto daquele bloco e ver o formato, o estado ou o lugar dela muda o que a "
-    "pessoa entende. Se a frase e' raciocinio, opiniao, contexto, transicao ou "
-    "historia, nao ha' o que ver: e' avatar.",
-    "NAO ILUSTRE PALAVRA CITADA DE PASSAGEM. O que decide nao e' a coisa ter sido "
-    "nomeada, e' ela ser O ASSUNTO daquele bloco. A MESMA coisa merece imagem num "
-    "video e nao merece noutro: se o video e' sobre ela, mostre sempre que ela "
-    "aparecer; se ela so' passou no meio de uma frase sobre outra coisa, avatar. "
-    "Uma imagem por substantivo enche o video de coisa que nao diz nada.",
-    "QUANDO ENTRAR, seja o que a fala nomeia naquele bloco — nao o tema geral do "
-    "video, nao um simbolo, nao um objeto de ambiente qualquer.",
+    "AS IMAGENS SAO DO ASSUNTO DO CANAL, NAO DE QUALQUER PALAVRA DITA. Antes de "
+    "comecar, diga a si mesmo em uma frase do que este canal trata — sai dos roteiros "
+    "de treino e do titulo. So' vira imagem o que PERTENCE a esse assunto. Se o canal "
+    "e' de comida, sao os alimentos, os ingredientes, o prato, o preparo. Se e' de "
+    "ferramenta, sao as ferramentas e as pecas. Cada canal tem as suas.",
+    "OBJETO DE APOIO NAO E' ASSUNTO, mesmo sendo concreto e mesmo tendo sido nomeado. "
+    "A narracao cita o tempo todo coisas que so' seguram a frase de pe'. O teste e' um "
+    "so': isso e' uma das coisas de que o canal trata, ou so' apareceu porque a frase "
+    "precisava citar? Se for a segunda, e' AVATAR. Isso nao e' lista de proibidos — a "
+    "mesma coisa que aqui e' cenario, noutro canal e' o assunto principal.",
+    "NA DUVIDA, AVATAR. Uma imagem do assunto errado e' pior que o narrador falando: "
+    "ela rouba a atencao e nao entrega nada. E' melhor ter menos imagem e toda ela "
+    "valer alguma coisa.",
     "FRASE ABSTRATA E' AVATAR, NAO IMAGEM. Tese, opiniao, 'aqui esta' uma coisa que', "
     "'ninguem faz isso por acaso', a apresentacao do narrador: nesses blocos escolha "
     "tipo avatar. Inventar um objeto generico pra ilustrar ideia e' o que enche o "

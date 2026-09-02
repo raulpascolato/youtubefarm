@@ -6,7 +6,7 @@ numero com a tag da ultima release do repositorio, entao os dois tem que andar j
 release v1.1.0 no GitHub <-> VERSAO = "1.1.0" aqui dentro.
 """
 
-VERSAO = "1.0.2"
+VERSAO = "1.0.3"
 
 # usuario/repositorio no GitHub. Vazio = o botao de atualizar fica desligado.
 REPO = "raulpascolato/youtubefarm"

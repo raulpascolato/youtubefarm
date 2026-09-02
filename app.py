@@ -4,22 +4,63 @@
 Nao abre navegador: sobe a API em 127.0.0.1 numa thread e desenha tudo dentro de uma
 janela WebView2 sem moldura do Windows. A barra de titulo (arrastar / minimizar /
 fechar) e' desenhada pelo proprio app, no HTML.
+
+ATENCAO A ORDEM DOS IMPORTS AQUI. So' entra biblioteca padrao no topo. Tudo que vem de
+fora (uvicorn, webview) e os modulos do proprio app entram DEPOIS, dentro do try — se
+um deles falhar com o import solto la' em cima, o erro acontece antes do try/except do
+final e o app morre calado: sem janela, sem erro.txt, sem nada. Foi o que aconteceu.
 """
 import json
 import os
 import socket
+import sys
 import threading
 import time
+import traceback
 import webbrowser
-
-import uvicorn
-import webview
-
-import janela_win32 as jw
-from caminhos import dir_dados
+from pathlib import Path
 
 LARGURA, ALTURA = 430, 800
 MINIMO = (360, 560)
+
+
+def _aviso(titulo, texto):
+    """Sem console, um erro nao aparece em lugar nenhum: a pessoa clica e nada acontece.
+    Entao qualquer falha vira uma caixa de dialogo do Windows."""
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, texto, titulo, 0x10)
+    except Exception:
+        print(texto)
+
+
+def _pasta():
+    """A pasta do app SEM depender do caminhos.py — ele mesmo pode ser o que falhou."""
+    return Path(__file__).resolve().parent
+
+
+try:
+    import uvicorn
+    import webview
+
+    import janela_win32 as jw
+except Exception:
+    _detalhe = traceback.format_exc()
+    try:
+        (_pasta() / "erro.txt").write_text(
+            "faltou instalar as dependencias do python\n\n"
+            "o que fazer\n\n"
+            "fecha isso e abre pelo \"youtube farm.bat\".\n"
+            "ele instala sozinho.\n\n\n"
+            + "-" * 60 + "\ndetalhe tecnico, so pra quem for arrumar\n\n" + _detalhe,
+            encoding="utf-8")
+    except Exception:
+        pass
+    _aviso("YOUTUBE FARM",
+           "faltou instalar as dependencias do python\n\n"
+           "fecha isso e abre pelo \"youtube farm.bat\".\nele instala sozinho.\n\n"
+           "(o detalhe ficou no arquivo erro.txt, na pasta do app)")
+    raise
 
 
 def porta_livre(preferida):
@@ -98,7 +139,7 @@ class Janela:
 
 def main():
     try:
-        cfg = json.loads((dir_dados() / "data" / "config.json").read_text(encoding="utf-8"))
+        cfg = json.loads((_pasta() / "data" / "config.json").read_text(encoding="utf-8"))
     except Exception:
         cfg = {}
     port = porta_livre(int(cfg.get("port") or 8777))
@@ -138,14 +179,9 @@ def main():
     os._exit(0)              # derruba a thread do uvicorn junto com a janela
 
 
-def _aviso(titulo, texto):
-    """Sem console (--windowed), um erro nao aparece em lugar nenhum: a pessoa clica e
-    nada acontece. Entao qualquer falha vira uma caixa de dialogo do Windows."""
-    try:
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, texto, titulo, 0x10)
-    except Exception:
-        print(texto)
+# os modulos que fazem parte do app — se um deles falta, e' arquivo, nao dependencia
+MEUS = {"app", "server", "montador", "roteirista", "diretor", "estilo",
+        "card", "store", "tts", "caminhos", "janela_win32", "versao"}
 
 
 def _diagnostico(detalhe):
@@ -157,6 +193,11 @@ def _diagnostico(detalhe):
     d = detalhe.lower()
     if "no module named" in d:
         falta = detalhe.split("No module named")[-1].strip().strip("'\"\n )")
+        if falta in MEUS:
+            return (f"esta faltando o arquivo {falta}.py na pasta do app",
+                    "a copia esta incompleta. baixa o projeto inteiro de novo\n"
+                    "(no github: botao verde Code > Download ZIP) e extrai por cima.\n"
+                    "as suas pastas data e bin nao vem no zip, entao nao se perde nada.")
         return (f"faltou instalar uma coisa do python ({falta})",
                 "fecha isso e abre pelo \"youtube farm.bat\".\n"
                 "ele instala sozinho na primeira vez.")
@@ -185,7 +226,7 @@ def _gravar_erro(detalhe):
              f"detalhe tecnico, so pra quem for arrumar\n\n"
              f"{detalhe}")
     try:
-        (dir_dados() / "erro.txt").write_text(texto, encoding="utf-8")
+        (_pasta() / "erro.txt").write_text(texto, encoding="utf-8")
     except Exception:
         pass
     return houve, fazer
