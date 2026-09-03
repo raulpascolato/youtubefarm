@@ -19,7 +19,7 @@ import re
 # Share por bloco. Nao e' mais o do video de referencia (15/62/22): com aquilo o video
 # virava enxurrada de imagem, uma por frase, e a maioria nao dizia nada. O avatar passou
 # a ser o padrao e a imagem so' entra quando ganha o lugar.
-MISTURA = {"avatar": 0.460, "imagem": 0.400, "video": 0.140}
+MISTURA = {"avatar": 0.360, "imagem": 0.500, "video": 0.140}
 
 # quantos b-rolls seguidos entre uma aparicao do avatar e a proxima (mediana medida: 4)
 BROLLS_ENTRE_AVATARES = 4
@@ -87,11 +87,19 @@ REGRAS = [
     "prateleira, a caixa fechada, a bancada, a maquina desligada nao sao o sujeito: "
     "o sujeito e' o que esta' dentro, em cima ou sendo feito. Medido no 1o video: em "
     "27 de 48 blocos a fala nomeava uma coisa e a imagem mostrou so' o vasilhame.",
-    "FECHE O ENQUADRAMENTO. O sujeito ocupa o quadro inteiro. Plano do ambiente so' "
-    "quando a narracao pedir o lugar — e' excecao, nao o normal.",
-    "UM SUJEITO SO'. Nomeie A COISA e, no maximo, a superficie embaixo dela. Nao "
-    "descreva o comodo, o que esta' ao fundo, ao lado, nem uma prateleira cheia. "
-    "Expandir a cena e' o que deixou a 1a leva toda parecida.",
+    "VARIE A DISTANCIA, NAO SO' O ANGULO. Close nao pode ser o padrao de tudo: trinta "
+    "closes seguidos cansam mesmo cada um sendo bonito. Alterne entre quatro distancias "
+    "ao longo do video, mais ou menos em partes iguais:\n"
+    "      MACRO   — so' um pedaco da coisa, textura, detalhe\n"
+    "      CLOSE   — a coisa inteira preenchendo o quadro\n"
+    "      MEDIO   — a coisa mais as maos ou a pessoa que a manuseia, de lado ou de costas\n"
+    "      ABERTO  — o lugar onde aquilo acontece, com a coisa dentro dele\n"
+    "   Diga a distancia na primeira palavra do prompt. Nunca use a mesma duas vezes "
+    "seguidas.",
+    "UM ASSUNTO SO' POR IMAGEM, seja qual for a distancia. No macro e no close, a "
+    "coisa e a superficie embaixo dela. No medio, a coisa e quem a manuseia. No "
+    "aberto, o lugar com a coisa dentro. O que nao pode e' listar tres objetos "
+    "soltos e um fundo cheio — ai' o gerador nao sabe o que e' o principal.",
     "AS IMAGENS SAO DO ASSUNTO DO CANAL, NAO DE QUALQUER PALAVRA DITA. Antes de "
     "comecar, diga a si mesmo em uma frase do que este canal trata — sai dos roteiros "
     "de treino e do titulo. So' vira imagem o que PERTENCE a esse assunto. Se o canal "
@@ -121,6 +129,21 @@ REGRAS = [
     "girando, caindo, sendo montado, gente andando, uma mao completando um gesto. "
     "Se a frase fala de uma coisa PARADA, e' imagem — e imagem e' o padrao; video "
     "e' a excecao com motivo.",
+    "LISTA VIRA UMA IMAGEM POR ITEM. Quando a narracao enumera — sem isso, sem aquilo, "
+    "leva tal e tal coisa — cada item ganha o seu bloco com a sua imagem, na ordem em "
+    "que sao ditos. Uma imagem so' pra cobrir a lista inteira desperdica o melhor "
+    "momento que o roteiro te da'.",
+    "CENA COM GENTE E' CENA, NAO OBJETO. Quando a narracao conta alguem fazendo alguma "
+    "coisa — a mae no fogao, o pai na lavoura, a mulher servindo a mesa — mostre A "
+    "PESSOA FAZENDO AQUILO, de costas ou de lado. Nao troque por um close do objeto "
+    "que ela esta' usando: a cena conta a historia, o objeto sozinho nao.",
+    "TEMPO E LUGAR SE MOSTRAM COM LUGAR. Quando a fala e' sobre uma epoca, uma data, "
+    "um ano, uma cidade ou 'naquele tempo', mostre o lugar: a casa, a rua, o bairro, a "
+    "lavoura, a fachada — de longe, em plano aberto. E' o unico caso em que plano "
+    "aberto e' melhor que close.",
+    "NAO DEIXE MONOTONO. Se voce ja' usou o mesmo tipo de plano nos ultimos blocos, "
+    "mude: alterne close de coisa, cena com gente, plano aberto de lugar, macro de "
+    "detalhe. Trinta closes seguidos do mesmo jeito cansam mais que qualquer erro.",
     "VARIE O ANGULO: de cima a prumo, macro rente, reto na altura do objeto, 45 "
     "graus. Repetir o mesmo angulo bloco apos bloco faz o video parecer a mesma "
     "foto o tempo todo.",

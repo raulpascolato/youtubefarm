@@ -34,6 +34,10 @@ X264 = ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
 # Sem dissolvencia. Ela colava o ULTIMO QUADRO do bloco anterior, parado, por cima
 # do proximo durante 0.4s — e um quadro parado no meio de um zoom parece que a
 # animacao travou antes de acabar. Corte seco resolve, e ainda monta mais rapido.
+class ErroMontagem(Exception):
+    pass
+
+
 def _run(cmd):
     r = subprocess.run([ffmpeg(), "-y", "-hide_banner", "-loglevel", "error", *cmd],
                        capture_output=True, text=True, creationflags=SEM_JANELA)
@@ -52,7 +56,7 @@ ZOOM_TETO = 1.90       # bloco muito longo pararia de fechar aqui, pra nao virar
 TAXA_PAN = 0.0107      # o centro anda 1,07% da largura por segundo
 
 
-def _kenburns(dur, variacao):
+def _kenburns(dur, variacao, render=None):
     """Zoom + deslocamento lento, pra foto parada nao cansar.
 
     Usa PERSPECTIVE, nao zoompan. O zoompan corta em pixel INTEIRO: medido, desvio de
@@ -63,17 +67,28 @@ def _kenburns(dur, variacao):
     constante. Com z linear a entrada acelerava e a saida desacelerava.
 
     Quatro variacoes: o lado troca a cada imagem, entrar/sair a cada duas.
+
+    RENDER encurta a SAIDA sem mudar o MOVIMENTO: o percurso continua sendo o do bloco
+    inteiro, so' que sao gerados menos quadros. E' o que a dissolvencia usa pra pegar
+    os primeiros 0.4s do movimento do bloco que entra.
+
+    O progresso e' on/(q-1), nao on/FPS: assim o ultimo quadro cai EXATAMENTE no fim do
+    percurso. Com tempo absoluto ele parava em 4.967s de 5.0s, e a imagem dava um pulo
+    de 47px no instante da troca.
     """
-    q = quadros(dur)
+    q_mov = quadros(dur)                            # o percurso e' sempre o do bloco
+    q = quadros(render) if render is not None else q_mov
     alcance = min(ZOOM_TETO, TAXA_ZOOM ** dur)      # quanto fecha neste bloco
     anda = TAXA_PAN * dur                           # quanto o centro caminha
-    # O LADO alterna a cada imagem — direita, esquerda, direita… — que e' o que se
-    # nota na tela. Entrar/sair alterna mais devagar, a cada duas, senao a combinacao
-    # seria sempre a mesma dupla e o ciclo ficaria previsivel.
-    pra_direita = variacao % 2 == 0
-    entrando = (variacao // 2) % 2 == 0
+    # ENTRAR/SAIR alterna a cada imagem, o LADO a cada duas. Essa ordem nao e' estetica,
+    # e' o que faz o bloco novo COMECAR exatamente onde o anterior parou — mesmo zoom,
+    # mesmo centro. Com o lado alternando a cada imagem (o inverso disso) dois blocos
+    # seguidos entravam, e a dissolvencia mostrava um fechado (1.32) por cima de um
+    # aberto (1.00): parecia um zoom surgindo do nada na troca.
+    entrando = variacao % 2 == 0
+    pra_direita = (variacao // 2) % 2 == 0
 
-    p = f"(on/{q - 1})"
+    p = f"(on/{q_mov - 1})"
     if entrando:
         z = f"(pow({alcance:.4f},{p}))"             # 1 -> alcance
         cx0, cx1 = 0.5, 0.5 + (anda if pra_direita else -anda)
@@ -90,7 +105,6 @@ def _kenburns(dur, variacao):
              f"interpolation=cubic:sense=source:eval=frame")
     return q, (f"scale={L}:{A}:force_original_aspect_ratio=increase,"
                f"crop={L}:{A},{persp},format=yuv420p,setsar=1")
-
 
 def importar_broll(pasta_dark, pasta_broll, destino):
     """Traz o que o DarkPlanner baixou pra dentro da pasta do video.
@@ -153,6 +167,44 @@ def quadros(dur):
     return max(2, int(round(dur * FPS)))
 
 
+DISSOLVE = 0.4      # b-roll emendando em b-roll: um derrete no outro
+
+
+def cauda(fonte, dur_novo, variacao_novo, saida):
+    """Os DISSOLVE segundos iniciais do bloco NOVO, mas com a imagem do bloco ANTERIOR.
+
+    E' o que a dissolvencia sobrepoe. A imagem e' a que esta' saindo; o movimento e' o
+    do que esta' entrando. Isso importa: como o bloco novo comeca exatamente onde o
+    anterior parou (mesmo zoom, mesmo centro), a cauda arranca sem salto E as duas
+    camadas se movem JUNTAS durante o fade.
+
+    Antes a cauda continuava o movimento do bloco que saia. Como as direcoes alternam,
+    ficava um fechando por cima de outro abrindo ao mesmo tempo — e a imagem parecia
+    inverter o zoom na troca.
+    """
+    q, vf = _kenburns(dur_novo, variacao_novo, render=DISSOLVE)
+    _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{DISSOLVE + 0.2:.3f}",
+          "-i", str(fonte), "-vf", vf, "-frames:v", str(q), *X264, str(saida)])
+
+
+def ultimo_quadro(clipe, dur, saida):
+    """O ultimo quadro de um bloco de video, pra servir de fonte da cauda."""
+    _run(["-stream_loop", "-1", "-ss", f"{max(0.0, dur - 0.05):.3f}", "-i", str(clipe),
+          "-frames:v", "1", "-q:v", "2", str(saida)])
+
+
+def emendar(cauda, atual, saida):
+    """Poe a CAUDA do bloco anterior por cima do atual, sumindo aos poucos.
+
+    A cauda e' a continuacao do movimento do bloco que sai — nao os ultimos quadros
+    dele. Com os ultimos quadros a imagem voltava 0.4s no tempo na troca.
+    """
+    fc = ["[1:v]format=rgba,fade=out:st=0:d=%s:alpha=1[ant]" % DISSOLVE,
+          "[0:v][ant]overlay=0:0:eof_action=pass[v]"]
+    _run(["-i", str(atual), "-i", str(cauda),
+          "-filter_complex", ";".join(fc), "-map", "[v]",
+          *X264, str(saida)])
+
 def seg_avatar(avatar, inicio, dur, saida):
     # -ss ANTES do -i: o ffmpeg pula direto pro ponto em vez de decodificar o arquivo
     # inteiro desde o comeco. Com re-encode continua no frame exato, e o lip-sync bate.
@@ -164,8 +216,11 @@ def seg_imagem(img, dur, saida, variacao=0):
     q, vf = _kenburns(dur, variacao)
     # -loop 1 aqui e' seguro: perspective faz 1 quadro de saida por quadro de entrada.
     # (Com zoompan era proibido — ele fazia d quadros POR entrada: 1003s por imagem.)
-    _run(["-loop", "1", "-t", f"{dur:.3f}", "-i", str(img), "-vf", vf,
-          "-frames:v", str(q), *X264, str(saida)])
+    # -framerate ANTES do -i: imagem parada entra a 25 fps por padrao no ffmpeg. Com
+    # isso o contador de quadros do filtro (on) so' chegava a 124 num bloco de 150, e
+    # o zoom parava em 84% do percurso — dai' o pulo de 48px na troca de bloco.
+    _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{dur:.3f}", "-i", str(img),
+          "-vf", vf, "-frames:v", str(q), *X264, str(saida)])
 
 
 def seg_video(clipe, dur, saida):
@@ -242,7 +297,8 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
         fim = float(plano[i + 1]["start"]) if i + 1 < len(plano) else float(b["end"])
         q = max(2, round(fim * FPS) - round(float(b["start"]) * FPS))
         dur = q / FPS
-        t = {"n": n, "dur": dur, "seg": tmp / f"seg_{n:03d}.mp4",
+        seg = tmp / f"seg_{n:03d}.mp4"
+        t = {"n": n, "dur": dur, "seg": seg, "final": seg,
              "start": b["start"], "arquivo": None, "imagem": False, "variacao": 0}
         if tipo == "card" and camadas:
             t["como"] = "card"
@@ -281,10 +337,42 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
     with ThreadPoolExecutor(max_workers=EM_PARALELO) as ex:
         list(ex.map(render, tarefas))
 
-    # ---- 3. junta ----
+    # ---- 3. dissolvencia entre b-rolls consecutivos ----
+    # So' b-roll derrete em b-roll; de e para o avatar o corte e' seco. Precisa ser uma
+    # segunda passada porque o fade usa o bloco anterior JA PRONTO — e assim as duas
+    # passadas continuam paralelas, em vez de virar fila indiana.
+    broll = {"imagem", "video"}
+    emendas = [i for i in range(1, len(tarefas))
+               if tarefas[i]["como"] in broll and tarefas[i - 1]["como"] in broll]
+    if emendas:
+        if on_status:
+            on_status(f"emendando {len(emendas)} transições…")
+
+        def emenda(i):
+            t, ant = tarefas[i], tarefas[i - 1]
+            # arquivo NOVO, nunca por cima do original: a emenda seguinte esta' lendo
+            # esse mesmo arquivo, e o Windows nao deixa substituir arquivo aberto.
+            base = t["seg"].with_name(t["seg"].stem + "_c")
+            saida = t["seg"].with_name(t["seg"].stem + "_e.mp4")
+            try:
+                if ant["como"] == "imagem":
+                    fonte = ant["arquivo"]
+                else:                       # clipe: usa o ultimo quadro dele
+                    fonte = base.with_suffix(".jpg")
+                    ultimo_quadro(ant["arquivo"], ant["dur"], fonte)
+                cauda(fonte, t["dur"], t.get("variacao", 0), base.with_suffix(".mp4"))
+                emendar(base.with_suffix(".mp4"), t["seg"], saida)
+                t["final"] = saida
+            except ErroMontagem:
+                pass          # sem a emenda o corte fica seco, mas o video sai
+
+        with ThreadPoolExecutor(max_workers=EM_PARALELO) as ex:
+            list(ex.map(emenda, emendas))
+
+    # ---- 4. junta ----
     if on_status:
         on_status("juntando os blocos…")
-    partes = [t["seg"] for t in tarefas]
+    partes = [t["final"] for t in tarefas]
     lista = tmp / "lista.txt"
     lista.write_text("".join(f"file '{p.as_posix()}'\n" for p in partes), encoding="utf-8")
     mudo = tmp / "mudo.mp4"

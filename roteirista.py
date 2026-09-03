@@ -402,6 +402,72 @@ def bloco_personagem(canal):
     return PERSONAGEM.format(ficha=ficha) if ficha else ""
 
 
+ENXUGAR = """Este roteiro passou do tamanho permitido. Reescreva ele INTEIRO, mais curto.
+
+TAMANHO ATUAL: {atual} caracteres
+LIMITE:        {maximo} caracteres
+TEM QUE SAIR:  {sobra} caracteres — cerca de {pct}% do texto
+
+Escreva em {idioma}. Isto NÃO é um resumo: é o mesmo roteiro, mais enxuto.
+
+MANTENHA, sem exceção:
+- o gancho da abertura, inteiro, com a promessa que ele faz
+- TODOS os itens/tópicos, na mesma ordem, nenhum a menos
+- o ponto-chave de cada item: a informação que a pessoa veio buscar
+- a virada do meio
+- o fechamento, com a resolução do gancho lá do começo
+- o anúncio do produto e as chamadas de inscrição/comentário, se houver
+- a voz do narrador: mesmas expressões, mesmo ritmo de frase
+
+CORTE daqui, nesta ordem:
+1. exemplos além do primeiro de cada ponto
+2. histórias de apoio que só reforçam algo já dito
+3. adjetivos, descrições de cenário, frases que reafirmam o parágrafo anterior
+4. rodeios antes de chegar ao ponto de cada item
+
+Item com pouco espaço vira o ponto-chave dito de forma direta, sem a história em
+volta. Nunca um item pela metade, nunca um item removido.
+
+Devolva SÓ o roteiro final. Sem comentários, sem contagem, sem explicação.
+
+--- ROTEIRO A ENCURTAR ---
+{texto}"""
+
+
+def _escrever(cliente, modelo, prompt, on_delta=None, max_tokens=32000):
+    buf = []
+    with cliente.messages.stream(model=modelo, max_tokens=max_tokens,
+                                 thinking={"type": "adaptive"},
+                                 messages=[{"role": "user", "content": prompt}]) as fluxo:
+        for ev in fluxo:
+            if ev.type == "content_block_delta" and ev.delta.type == "text_delta":
+                buf.append(ev.delta.text)
+                if on_delta:
+                    on_delta("".join(buf))
+        fluxo.get_final_message()
+    return "".join(buf).strip()
+
+
+def enxugar(api_key, modelo, texto, maximo, idioma, on_delta=None, tentativas=2):
+    """Pedir educadamente não bastou: o modelo estoura o limite com frequência.
+    Aqui a gente MEDE e manda cortar, dizendo quantos caracteres precisam sair.
+    Cada passada custa uma geração a mais — só roda quando realmente passou."""
+    cliente = anthropic.Anthropic(api_key=api_key)
+    for _ in range(tentativas):
+        if len(texto) <= maximo:
+            break
+        sobra = len(texto) - maximo
+        novo = _escrever(cliente, modelo, ENXUGAR.format(
+            atual=len(texto), maximo=maximo, sobra=sobra,
+            pct=round(100 * sobra / len(texto)), idioma=idioma, texto=texto),
+            on_delta=on_delta)
+        # se a "correção" veio maior ou absurdamente curta, descarta e fica com o que tinha
+        if not novo or len(novo) >= len(texto) or len(novo) < maximo * 0.5:
+            break
+        texto = novo
+    return texto
+
+
 def gerar_roteiro(api_key, modelo, titulo, dur_min, idioma, roteiros, alvo_chars,
                   on_delta=None, canal=None):
     """Gera o roteiro em streaming. on_delta(texto_parcial_acumulado) e' chamado a cada

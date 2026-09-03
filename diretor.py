@@ -71,15 +71,18 @@ Imagem é o padrão; só escolha vídeo quando algo precisa se mexer.
 Em INGLÊS. Descreva a cena concreta e visual, com enquadramento e luz. Sem ponto final.
 Use estes modificadores quando couberem: {mods}
 
-Os exemplos abaixo são de canais diferentes de propósito. Copie a FORMA deles —
-um sujeito, curto, ângulo dito, sem luz, sem cômodo — nunca o assunto.
+Os exemplos abaixo são de canais diferentes de propósito, e em distâncias diferentes.
+Copie a FORMA — uma distância dita na primeira palavra, um assunto, curto, sem luz —
+nunca o conteúdo.
 
-  "Top-down extreme close-up of a plate of boiled potatoes with butter melting on them"
   "Macro of a thick pat of butter half sunk in a bowl of clear water"
-  "Extreme close-up of a rusted bolt head on a car engine block"
-  "Straight-on close-up of a cracked leather boot sole worn through at the heel"
-  "Top-down close-up of a pot full of macaroni in tomato sauce, steam rising"
-  "45-degree close-up of a coil of frayed rope on a boat deck"
+  "Close-up of a slice of fried bologna in a black cast iron pan"
+  "Medium shot of two hands lifting a heavy pot off a stove, seen from the side"
+  "Wide shot of a small farm kitchen with a pot steaming on the stove"
+  "Macro of a rusted bolt head on a car engine block"
+  "Medium shot of a man from behind tightening a bolt under a raised car"
+  "Wide shot of a repair shop with a car up on the lift"
+  "Close-up of a coil of frayed rope on a boat deck"
 
 Exemplos do tom ERRADO, todos tirados de uma leva real:
   "Close-up of a rustic pantry shelf lined with glass jars of preserved vegetables and
