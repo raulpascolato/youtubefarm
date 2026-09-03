@@ -102,6 +102,12 @@ REGRAS = [
     "so': isso e' uma das coisas de que o canal trata, ou so' apareceu porque a frase "
     "precisava citar? Se for a segunda, e' AVATAR. Isso nao e' lista de proibidos — a "
     "mesma coisa que aqui e' cenario, noutro canal e' o assunto principal.",
+    "SE A NARRACAO PARA NUM OBJETO DE APOIO, O BLOCO E' AVATAR — mesmo que desse pra "
+    "desenhar, mesmo que a frase descreva aquilo em detalhe. E' o caso mais comum de "
+    "imagem ruim: a narracao passa meio minuto no recipiente, na porta, no movel, e o "
+    "video enche de foto de coisa que ninguem veio ver. O narrador falando cobre esse "
+    "trecho melhor do que qualquer imagem. So' volte pra imagem quando a fala voltar "
+    "pro assunto do canal.",
     "NA DUVIDA, AVATAR. Uma imagem do assunto errado e' pior que o narrador falando: "
     "ela rouba a atencao e nao entrega nada. E' melhor ter menos imagem e toda ela "
     "valer alguma coisa.",
