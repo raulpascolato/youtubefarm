@@ -70,6 +70,7 @@ Imagem é o padrão; só escolha vídeo quando algo precisa se mexer.
 
 Em INGLÊS. Descreva a cena concreta e visual, com enquadramento e luz. Sem ponto final.
 Use estes modificadores quando couberem: {mods}
+NUNCA escreva estas palavras no prompt: {proibidos}
 
 Os exemplos abaixo são de canais diferentes de propósito, e em distâncias diferentes.
 Copie a FORMA — uma distância dita na primeira palavra, um assunto, curto, sem luz —
@@ -226,6 +227,7 @@ def _system(canal=None):
         p_video=round(estilo.MISTURA["video"] * 100),
         entre=estilo.BROLLS_ENTRE_AVATARES,
         mods=", ".join(estilo.MODIFICADORES_BONS),
+        proibidos=", ".join(estilo.MODIFICADORES_PROIBIDOS),
         regras="\n".join(f"- {r}" for r in estilo.REGRAS),
     )
 

@@ -43,6 +43,20 @@ def erro(msg, code=400):
     return JSONResponse({"ok": False, "erro": msg}, status_code=code)
 
 
+# As etapas dependem umas das outras: a narracao le' o roteiro, a direcao le' o SRT da
+# narracao, a montagem le' a direcao. Refazer uma etapa invalida TUDO que vem depois.
+#
+# Sem isso o app continuava mostrando "montagem pronta" com o botao abrindo o video do
+# roteiro ANTIGO, e "direcao pronta" apontando pra um plano.json feito em cima de um SRT
+# que nao existe mais. O avatar tambem cai: ele e' a gravacao do roteiro velho.
+DEPOIS_DO_ROTEIRO = dict(audio_estado="nao", audio_msg="", audio_erro="",
+                         audio_path="", srt_path="", avatar_path="")
+DEPOIS_DO_AUDIO = dict(direcao_estado="nao", direcao_msg="", direcao_erro="",
+                       direcao_resumo={}, pasta_dark="", broll_resumo={})
+DEPOIS_DA_DIRECAO = dict(montagem_estado="nao", montagem_msg="", montagem_erro="",
+                         montagem_saida="", montagem_faltaram=0)
+
+
 # ------------------------------------------------------------------ config
 def _mascara(k):
     return (k[:10] + "…" + k[-4:]) if len(k) > 18 else ("" if not k else "•••")
@@ -400,7 +414,8 @@ def criar_audio(vid: str):
 
     pasta = dir_saida() / _slug(canal["nome"], 40) / _slug(v["titulo"])
     store.up_video(vid, audio_estado="gerando", audio_msg="preparando…",
-                   audio_erro="", pasta=str(pasta))
+                   audio_erro="", pasta=str(pasta),
+                   **DEPOIS_DO_AUDIO, **DEPOIS_DA_DIRECAO)
     threading.Thread(target=_gerar_audio, args=(vid, v, canal, cfg, pasta),
                      daemon=True).start()
     return store.video(vid)
@@ -443,7 +458,7 @@ def criar_direcao(vid: str):
         return erro("falta a chave do Claude. Coloca em Ajustes.")
     canal = store.canal(v["canal_id"])
     store.up_video(vid, direcao_estado="gerando", direcao_msg="lendo o SRT…",
-                   direcao_erro="")
+                   direcao_erro="", **DEPOIS_DA_DIRECAO)
     threading.Thread(target=_gerar_direcao, args=(vid, v, canal, cfg), daemon=True).start()
     return store.video(vid)
 
@@ -580,8 +595,7 @@ def refazer_roteiro(vid: str):
     if not roteiros:
         return erro("o modelo desse canal está vazio ou foi removido.")
     store.up_video(vid, estado="gerando", roteiro="", n_chars=0, erro="", aviso="",
-                   audio_estado="nao", audio_path="", srt_path="",
-                   direcao_estado="nao", direcao_resumo={})
+                   **DEPOIS_DO_ROTEIRO, **DEPOIS_DO_AUDIO, **DEPOIS_DA_DIRECAO)
     threading.Thread(target=_gerar,
                      args=(vid, canal, v["titulo"], v["dur"], v["alvo_chars"],
                            roteiros, cfg), daemon=True).start()

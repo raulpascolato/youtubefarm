@@ -13,7 +13,6 @@ final e o app morre calado: sem janela, sem erro.txt, sem nada. Foi o que aconte
 import json
 import os
 import socket
-import sys
 import threading
 import time
 import traceback

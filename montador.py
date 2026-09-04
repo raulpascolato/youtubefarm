@@ -133,7 +133,9 @@ def importar_broll(pasta_dark, pasta_broll, destino):
     videos = indexar("videos", {".mp4", ".mov", ".webm"})
 
     conta = {"imagem": 0, "video": 0, "faltando": []}
-    for linha in csv.DictReader(open(mapa, encoding="utf-8-sig")):
+    with open(mapa, encoding="utf-8-sig", newline="") as fmapa:
+        linhas = list(csv.DictReader(fmapa))
+    for linha in linhas:
         ordem, bloco, tipo = int(linha["ordem"]), int(linha["bloco"]), linha["tipo"]
         origem = videos.get(ordem) if tipo == "video" else imagens.get(ordem)
         if origem is None:                      # o video nao veio? usa a imagem dele
@@ -170,7 +172,7 @@ def quadros(dur):
 DISSOLVE = 0.4      # b-roll emendando em b-roll: um derrete no outro
 
 
-def cauda(fonte, dur_novo, variacao_novo, saida):
+def cauda(fonte, dur_novo, variacao_novo, saida, parado=False):
     """Os DISSOLVE segundos iniciais do bloco NOVO, mas com a imagem do bloco ANTERIOR.
 
     E' o que a dissolvencia sobrepoe. A imagem e' a que esta' saindo; o movimento e' o
@@ -182,14 +184,30 @@ def cauda(fonte, dur_novo, variacao_novo, saida):
     ficava um fechando por cima de outro abrindo ao mesmo tempo — e a imagem parecia
     inverter o zoom na troca.
     """
-    q, vf = _kenburns(dur_novo, variacao_novo, render=DISSOLVE)
-    _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{DISSOLVE + 0.2:.3f}",
+    # render nunca passa da duracao do bloco: com um bloco de 0.2s o progresso
+    # on/(q_mov-1) passaria de 1 e o zoom dispararia pra taxa^varias vezes o alcance.
+    corte = min(DISSOLVE, dur_novo)
+    if parado:
+        # o bloco que entra e' um clipe de video, que nao tem ken burns. Uma cauda
+        # com movimento deslizaria por cima de um video parado — as duas camadas
+        # precisam andar juntas, entao aqui ela tambem fica parada.
+        q, vf = quadros(corte), FIT
+    else:
+        q, vf = _kenburns(dur_novo, variacao_novo, render=corte)
+    _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{corte + 0.2:.3f}",
           "-i", str(fonte), "-vf", vf, "-frames:v", str(q), *X264, str(saida)])
 
 
-def ultimo_quadro(clipe, dur, saida):
-    """O ultimo quadro de um bloco de video, pra servir de fonte da cauda."""
-    _run(["-stream_loop", "-1", "-ss", f"{max(0.0, dur - 0.05):.3f}", "-i", str(clipe),
+def ultimo_quadro(segmento, dur, saida):
+    """O ultimo quadro de um bloco de video, pra servir de fonte da cauda.
+
+    Le' o SEGMENTO ja' renderizado, nao o clipe original. O clipe original pode ser
+    mais curto que o bloco (por isso o -stream_loop na hora de gerar), e ai' o -ss
+    caia depois do fim do arquivo: nao saia quadro nenhum, o ffmpeg dava erro, e a
+    dissolvencia era descartada em silencio pelo except la' embaixo. O segmento tem
+    exatamente a duracao do bloco, entao esse seek sempre acerta.
+    """
+    _run(["-ss", f"{max(0.0, dur - 0.05):.3f}", "-i", str(segmento),
           "-frames:v", "1", "-q:v", "2", str(saida)])
 
 
@@ -277,6 +295,17 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
     if tmp.exists():
         shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True, exist_ok=True)
+    # ignore_errors=True e' proposital (arquivo aberto nao impede o resto), mas ele
+    # falha CALADO. Se uma montagem foi interrompida, sobra ffmpeg segurando arquivo
+    # aqui, o rmtree pula justamente esses, e a montagem seguinte ia juntar segmentos
+    # que nunca foram gerados — quebrando 6 minutos depois, com erro incompreensivel.
+    restos = [p.name for p in tmp.iterdir()]
+    if restos:
+        raise ErroMontagem(
+            f"a pasta de trabalho nao ficou limpa ({len(restos)} arquivos presos). "
+            "Provavelmente uma montagem anterior foi interrompida e ficou um ffmpeg "
+            "rodando. Feche o app, abra o Gerenciador de Tarefas, encerre os processos "
+            "ffmpeg.exe, apague a pasta _montagem e tente de novo.")
 
     camadas = card.montar(tmp, canal) if canal else None
     total = len(plano)
@@ -359,12 +388,18 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
                     fonte = ant["arquivo"]
                 else:                       # clipe: usa o ultimo quadro dele
                     fonte = base.with_suffix(".jpg")
-                    ultimo_quadro(ant["arquivo"], ant["dur"], fonte)
-                cauda(fonte, t["dur"], t.get("variacao", 0), base.with_suffix(".mp4"))
+                    # ant["seg"] e' o original, escrito na fase 2 e nunca mais tocado.
+                    # ant["final"] pode estar sendo escrito agora por outra emenda.
+                    ultimo_quadro(ant["seg"], ant["dur"], fonte)
+                cauda(fonte, t["dur"], t.get("variacao", 0), base.with_suffix(".mp4"),
+                      parado=t["como"] != "imagem")
                 emendar(base.with_suffix(".mp4"), t["seg"], saida)
                 t["final"] = saida
-            except ErroMontagem:
-                pass          # sem a emenda o corte fica seco, mas o video sai
+            except Exception:
+                # sem a emenda o corte fica seco, mas o video sai. Vale pra qualquer
+                # erro, nao so' ErroMontagem: um disco cheio ou um arquivo travado numa
+                # transicao nao pode jogar fora a montagem inteira que ja' rodou.
+                pass
 
         with ThreadPoolExecutor(max_workers=EM_PARALELO) as ex:
             list(ex.map(emenda, emendas))

@@ -23,7 +23,6 @@ MISTURA = {"avatar": 0.360, "imagem": 0.500, "video": 0.140}
 
 # quantos b-rolls seguidos entre uma aparicao do avatar e a proxima (mediana medida: 4)
 BROLLS_ENTRE_AVATARES = 4
-ABERTURA_AVATAR_S = 8.8      # o video abre com o avatar segurando esse tanto
 
 # Tamanho dos pedacos em que a narracao e' picada (vai pro DarkPlanner junto com o audio).
 # Cada pedaco e' uma cena: e' esse numero que decide de quanto em quanto tempo a tela muda.
