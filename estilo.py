@@ -57,11 +57,24 @@ ENQUADRAMENTO = ("16:9 aspect ratio, full frame composition, no blurred backgrou
 
 # So' angulo e distancia. Luz e textura ja' vem no SUFIXO — repetir aqui e' o que
 # entulhava o prompt e fazia o gerador tentar caber tudo no mesmo quadro.
-MODIFICADORES_BONS = [
-    "top-down", "directly overhead", "extreme close-up", "macro",
-    "straight-on at eye level with the subject", "45-degree angle",
-    "low angle close to the surface", "from just above it",
+#
+# A lista antiga tinha OITO entradas e TRES delas eram a mesma coisa vista de cima
+# ("top-down", "directly overhead", "from just above it"), contra nenhuma de lado e
+# nenhuma de frente. O diretor escolhia honestamente da lista e mesmo assim o video
+# saia com camera de cima o tempo todo. Agora sao oito angulos DIFERENTES entre si,
+# e a distancia (macro/close/medio/aberto) e' escolha separada desta.
+ANGULOS = [
+    "from directly above, looking straight down",
+    "from the side, at the same height as the subject",
+    "from the front, straight on",
+    "at a 45-degree angle from above",
+    "from below, close to the surface it rests on",
+    "from behind, over the shoulder of whoever is there",
+    "three-quarter view, the subject turned slightly away",
+    "from one end, looking along its length",
 ]
+# nome antigo, ainda usado pelo prompt do diretor
+MODIFICADORES_BONS = ANGULOS
 
 MODIFICADORES_PROIBIDOS = [
     "text", "sign", "label", "poster", "newspaper", "book page", "screen", "subtitle",
@@ -143,15 +156,33 @@ REGRAS = [
     "NAO DEIXE MONOTONO. Se voce ja' usou o mesmo tipo de plano nos ultimos blocos, "
     "mude: alterne close de coisa, cena com gente, plano aberto de lugar, macro de "
     "detalhe. Trinta closes seguidos do mesmo jeito cansam mais que qualquer erro.",
-    "VARIE O ANGULO: de cima a prumo, macro rente, reto na altura do objeto, 45 "
-    "graus. Repetir o mesmo angulo bloco apos bloco faz o video parecer a mesma "
-    "foto o tempo todo.",
+    "VARIE O ANGULO — E ELE E' ESCOLHA SEPARADA DA DISTANCIA. Toda imagem tem as "
+    "duas coisas: A QUE DISTANCIA (macro/close/medio/aberto) e DE ONDE A CAMERA OLHA. "
+    "Escreva as duas na primeira parte do prompt.\n"
+    "   Rode entre estes, sem repetir o mesmo angulo em blocos seguidos:\n"
+    "      DE CIMA a prumo, olhando pra baixo\n"
+    "      DE LADO, na mesma altura da coisa\n"
+    "      DE FRENTE, reto\n"
+    "      45 GRAUS de cima\n"
+    "      DE BAIXO, rente a superficie\n"
+    "      POR TRAS, sobre o ombro de quem estiver ali\n"
+    "      TRES QUARTOS, a coisa meio virada\n"
+    "      DA PONTA, olhando ao comprido\n"
+    "   DE CIMA no maximo em 1 de cada 5 imagens. Medido no 1o video: a camera de "
+    "cima dominou porque a lista de sugestoes tinha tres jeitos de dizer 'de cima' "
+    "e nenhum de dizer 'de lado'. Um video inteiro visto de cima parece catalogo.",
     "CURTO. Ate' umas 15 palavras. Prompt comprido faz o gerador tentar caber tudo "
     "e nada fica em primeiro plano.",
     "MAO NO QUADRO E' EXCECAO. So' quando a acao nao existe sem ela. Na duvida, "
     "mostre so' a coisa. Nunca alguem de frente falando: esse e' o avatar.",
     "A cena tem que caber na duracao do bloco: um bloco de 4s nao comporta uma acao "
     "com comeco, meio e fim.",
+    "CADA BLOCO E' UMA FRASE INTEIRA — a imagem e' DAQUELA FRASE, nao do paragrafo. "
+    "Os blocos sao cortados nas pausas reais da narracao, entao cada um comeca quando "
+    "um pensamento comeca e acaba quando ele acaba. Leia a frase do bloco e pergunte: "
+    "do que ELA fala? Nao vale ilustrar o assunto geral do trecho, nem repetir a "
+    "imagem do bloco anterior porque 'ainda e' sobre a mesma coisa'. Se a frase mudou "
+    "de coisa, a imagem muda junto; se ela nao fala de nada mostravel, e' AVATAR.",
 ]
 
 

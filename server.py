@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 import caminhos
 import diretor
 import estilo
+import fala
 import montador
 import roteirista
 import tts
@@ -215,10 +216,59 @@ def escolher_voz(cid: str, body: dict = Body(...)):
 _vozes_cache = {"lista": [], "quando": 0.0}
 
 # o idioma do canal e' escrito por extenso; a API usa codigo ISO
-ISO = {"português": "pt", "portugues": "pt", "english": "en", "deutsch": "de",
-       "español": "es", "espanol": "es", "français": "fr", "francais": "fr",
-       "italiano": "it", "nederlands": "nl", "polski": "pl", "svenska": "sv",
-       "dansk": "da", "norsk": "no"}
+ISO = {"português": "pt", "portugues": "pt", "inglês": "en", "ingles": "en",
+       "alemão": "de", "alemao": "de", "espanhol": "es", "francês": "fr",
+       "frances": "fr", "italiano": "it", "holandês": "nl", "holandes": "nl",
+       "polonês": "pl", "polones": "pl", "sueco": "sv", "dinamarquês": "da",
+       "dinamarques": "da", "norueguês": "no", "noruegues": "no",
+       "finlandês": "fi", "finlandes": "fi",
+       # os nomes antigos continuam valendo: o idioma fica GRAVADO no canal, e um canal
+       # criado antes desta lista ainda tem "Deutsch" salvo. Tirar daqui faria o filtro
+       # de vozes dele parar de achar qualquer coisa.
+       "english": "en", "deutsch": "de", "español": "es", "espanol": "es",
+       "français": "fr", "francais": "fr", "nederlands": "nl", "polski": "pl",
+       "svenska": "sv", "dansk": "da", "norsk": "no", "suomi": "fi"}
+
+# De onde a voz vem, pra mostrar embaixo do nome dela na lista. O idioma NATIVO e' o que
+# separa uma voz que FALA noruegues de uma voz NORUEGUESA — a API tem 441 do primeiro
+# tipo e nenhuma do segundo, e ate' agora isso nao aparecia em lugar nenhum na tela.
+IDIOMA_NOME = {
+    "ar": "árabe", "bg": "búlgaro", "cs": "tcheco", "da": "dinamarquês",
+    "de": "alemão", "el": "grego", "en": "inglês", "es": "espanhol",
+    "fi": "finlandês", "fil": "filipino", "fr": "francês", "hi": "hindi",
+    "hr": "croata", "hu": "húngaro", "id": "indonésio", "it": "italiano",
+    "ja": "japonês", "ko": "coreano", "ms": "malaio", "nl": "holandês",
+    "no": "norueguês", "pl": "polonês", "pt": "português", "ro": "romeno",
+    "ru": "russo", "sk": "eslovaco", "sv": "sueco", "ta": "tâmil",
+    "tr": "turco", "uk": "ucraniano", "vi": "vietnamita", "zh": "chinês"}
+
+# Sao 74 sotaques diferentes na API. Traduzo os comuns; o resto passa como veio, porque
+# quase todos ja' sao nome de cidade ou regiao (stockholm, quebec, istanbul, mazovian).
+SOTAQUE = {
+    "american": "americano", "british": "britânico", "brazilian": "brasileiro",
+    "latin american": "latino-americano", "peninsular": "da Espanha",
+    "mexican": "mexicano", "indian": "indiano", "european": "europeu",
+    "australian": "australiano", "us southern": "do sul dos EUA",
+    "portuguese": "de Portugal", "canadian": "canadense", "irish": "irlandês",
+    "scottish": "escocês", "swedish": "sueco", "german": "alemão",
+    "french": "francês", "italian": "italiano", "polish": "polonês",
+    "dutch": "holandês", "danish": "dinamarquês", "norwegian": "norueguês",
+    "finnish": "finlandês", "argentinian": "argentino", "colombian": "colombiano",
+    "chilean": "chileno", "castilian": "castelhano", "egyptian": "egípcio",
+    "nigerian": "nigeriano", "south african": "sul-africano",
+    "new zealand": "neozelandês", "transatlantic": "transatlântico"}
+
+
+def _origem(v):
+    """De onde a voz e': "polonês · mazovian". Vai embaixo do nome dela na lista."""
+    i = v.get("voice_info") or {}
+    lingua = IDIOMA_NOME.get(i.get("language") or "", "")
+    ac = (i.get("accent") or "").strip().lower()
+    # "standard" nao informa nada, e' so' ruido embaixo do nome
+    ac = "" if ac in ("", "standard", "neutral") else SOTAQUE.get(ac, ac)
+    if lingua and ac and ac != lingua:
+        return lingua + " · " + ac
+    return lingua or ac
 
 # Qual gravacao usar no preview. multilingual_v2 e' o modelo de mais alta qualidade da
 # ElevenLabs pra voz multilingue, feito pra narracao — e o que tem mais entradas em
@@ -285,7 +335,8 @@ def listar_vozes(q: str = "", genero: str = "", idioma: str = "",
 
     def linha(v, grupo):
         return {"id": v.get("id"), "nome": v.get("name"),
-                "genero": v.get("gender"), "grupo": grupo}
+                "genero": v.get("gender"), "grupo": grupo,
+                "origem": _origem(v)}
 
     limite = max(1, min(200, limite))
     paginas = max(1, -(-len(no_idioma) // limite))      # divisao arredondando pra cima
@@ -444,6 +495,59 @@ def _gerar_audio(vid, v, canal, cfg, pasta):
         store.up_video(vid, audio_estado="erro", audio_msg="", audio_erro=str(e))
 
 
+@app.post("/api/videos/{vid}/aparar")
+def aparar_pausas(vid: str):
+    """Encurta as pausas da narracao e reescreve o blocos.srt junto."""
+    v = store.video(vid)
+    if not v:
+        return erro("vídeo não encontrado.", 404)
+    if v["audio_estado"] != "pronto":
+        return erro("gera a narração primeiro.")
+    if v.get("aparado_s"):
+        return erro("as pausas desse áudio já foram aparadas.")
+    if not caminhos.tem_ffmpeg():
+        return erro("não achei o ffmpeg. Ele deveria estar em bin/ffmpeg.exe.")
+    # o audio encurta, entao TUDO que foi feito em cima dele morre — inclusive o
+    # avatar, que o HeyGen sincronizou com o audio antigo e ficaria adiantado do
+    # comeco ao fim. Por isso o botao so' faz sentido ANTES de gravar o avatar.
+    store.up_video(vid, audio_estado="gerando", audio_msg="ouvindo as pausas…",
+                   audio_erro="", avatar_path="",
+                   **DEPOIS_DO_AUDIO, **DEPOIS_DA_DIRECAO)
+    threading.Thread(target=_aparar, args=(vid, v), daemon=True).start()
+    return store.video(vid)
+
+
+def _aparar(vid, v):
+    try:
+        pasta = Path(v["pasta"])
+        blocos = diretor.parse_srt(v["srt_path"])
+        novo_audio = pasta / "_aparado.mp3"
+        novos, cortou = fala.aparar(
+            v["audio_path"], blocos, novo_audio,
+            on_status=lambda t: store.up_video(vid, audio_msg=t))
+        if cortou <= 0:
+            novo_audio.unlink(missing_ok=True)
+            store.up_video(vid, audio_estado="pronto", audio_msg="", aparado_s=0)
+            return
+        # os originais ficam ao lado, com outro nome. O audio.mp3 e' o arquivo que
+        # voce leva pro HeyGen, entao o aparado tem que assumir ESSE nome — senao da'
+        # pra subir o antigo sem querer e perder o corte todo.
+        atual, srt = Path(v["audio_path"]), Path(v["srt_path"])
+        guarda_a, guarda_s = pasta / "audio_original.mp3", pasta / "blocos_original.srt"
+        if not guarda_a.exists():
+            shutil.copy2(atual, guarda_a)
+        if not guarda_s.exists():
+            shutil.copy2(srt, guarda_s)
+        os.replace(novo_audio, atual)
+        fala.escrever_srt(novos, srt)
+        store.up_video(vid, audio_estado="pronto", audio_msg="", audio_erro="",
+                       aparado_s=round(cortou, 1))
+    except Exception as e:
+        traceback.print_exc()
+        store.up_video(vid, audio_estado="pronto", audio_msg="",
+                       audio_erro=f"não consegui aparar as pausas: {e}")
+
+
 @app.post("/api/videos/{vid}/direcao")
 def criar_direcao(vid: str):
     v = store.video(vid)
@@ -466,6 +570,19 @@ def criar_direcao(vid: str):
 def _gerar_direcao(vid, v, canal, cfg):
     try:
         blocos = diretor.parse_srt(v["srt_path"])
+        # As fronteiras do SRT do DarkPlanner caem por duracao, nao por frase: medido,
+        # 36% dos blocos terminavam no meio de uma frase. O fala.alinhar refaz os blocos
+        # em cima de frases e poe cada corte na pausa REAL do audio. Se der qualquer
+        # problema (ffmpeg fora do ar, audio sumido) segue com o SRT cru: pior sincronia,
+        # mas o video sai.
+        try:
+            store.up_video(vid, direcao_msg="ouvindo as pausas da narracao…")
+            alinhados = fala.alinhar(blocos, v["audio_path"],
+                                     estilo.BLOCO_MIN_S, estilo.BLOCO_MAX_S)
+            if alinhados:
+                blocos = alinhados
+        except Exception:
+            traceback.print_exc()
         plano = diretor.dirigir(
             api_key=cfg["anthropic_key"],
             modelo=cfg.get("modelo") or "claude-opus-5",

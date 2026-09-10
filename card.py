@@ -39,10 +39,24 @@ KICKER = {
     "it": "IL LIBRO DA CUI LEGGE",
     "nl": "HET BOEK WAARUIT HIJ LEEST",
     "pl": "KSIĄŻKA, Z KTÓREJ CZYTA",
+    "sv": "BOKEN HAN LÄSER UR",
+    "da": "BOGEN HAN LÆSER FRA",
+    "no": "BOKEN HAN LESER FRA",
+    "fi": "KIRJA, JOSTA HÄN LUKEE",
 }
-IDIOMA = {"português": "pt", "portugues": "pt", "english": "en", "deutsch": "de",
-          "español": "es", "espanol": "es", "français": "fr", "francais": "fr",
-          "italiano": "it", "nederlands": "nl", "polski": "pl"}
+# Este mapa e' irmao do ISO do server.py e vive separado so' porque o card nao importa o
+# servidor. Os dois precisam cobrir os MESMOS idiomas: faltava aqui sueco, dinamarques e
+# noruegues, e um canal nesses idiomas ganhava o texto em INGLES no card, calado.
+IDIOMA = {"português": "pt", "portugues": "pt", "inglês": "en", "ingles": "en",
+          "alemão": "de", "alemao": "de", "espanhol": "es", "francês": "fr",
+          "frances": "fr", "italiano": "it", "holandês": "nl", "holandes": "nl",
+          "polonês": "pl", "polones": "pl", "sueco": "sv", "dinamarquês": "da",
+          "dinamarques": "da", "norueguês": "no", "noruegues": "no",
+          "finlandês": "fi", "finlandes": "fi",
+          # nomes antigos, pros canais criados antes desta lista
+          "english": "en", "deutsch": "de", "español": "es", "espanol": "es",
+          "français": "fr", "francais": "fr", "nederlands": "nl", "polski": "pl",
+          "svenska": "sv", "dansk": "da", "norsk": "no", "suomi": "fi"}
 
 
 def kicker_do_idioma(idioma):

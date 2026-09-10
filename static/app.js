@@ -6,8 +6,9 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const IDIOMAS = ["Português", "English", "Deutsch", "Español", "Français",
-                 "Italiano", "Nederlands", "Polski", "Svenska", "Dansk", "Norsk"];
+const IDIOMAS = ["Português", "Inglês", "Alemão", "Espanhol", "Francês",
+                 "Italiano", "Holandês", "Polonês", "Sueco", "Dinamarquês",
+                 "Norueguês", "Finlandês"];
 
 /* faixa fixa de duração — o app nunca escreve fora disso (o servidor também barra) */
 const DURACOES = [16, 17, 18, 19, 20];
@@ -207,7 +208,8 @@ async function copiarModeloPersona() {
   const idioma = ($("#ec-idioma")?.value || "").trim();
   const pedido = [
     "Vou anexar a foto do narrador do meu canal do YouTube. Preencha a ficha dele.",
-    idioma ? `Idioma do canal: ${idioma}` : "Idioma do canal: (escreva aqui)",
+    idioma ? `O canal é em ${idioma} — escreva isso no campo Idioma.`
+           : "No campo Idioma escreva o idioma do canal.",
     "",
     "A idade sai da foto. O nome você inventa, já no idioma do canal, e tem que",
     "combinar com a idade e a região de quem aparece na imagem.",
@@ -574,7 +576,23 @@ function blocoAudio(v) {
     <div class="pad"><button class="btn secundario" onclick="gerarAudio()">Tentar de novo</button></div>`;
   if (e === "pronto") return `
     <div class="group">
-      <div class="row"><audio controls class="player" src="/api/videos/${v.id}/audio.mp3"></audio></div>
+      <div class="row"><audio controls class="player" src="/api/videos/${v.id}/audio.mp3?v=${
+        v.aparado_s || 0}"></audio></div>
+      ${v.aparado_s ? `
+      <div class="row">
+        <div class="row-corpo">
+          <div class="row-titulo">Pausas aparadas</div>
+          <div class="row-sub">${v.aparado_s}s a menos · o original está em audio_original.mp3</div>
+        </div>
+      </div>` : `
+      <button class="row" onclick="apararPausas()">
+        <div class="row-corpo">
+          <div class="row-titulo">Aparar as pausas</div>
+          <div class="row-sub">encurta os silêncios longos e reescreve o blocos.srt junto.
+            Faça ANTES de gravar o avatar</div>
+        </div>
+        <div class="chevron"></div>
+      </button>`}
       <button class="row" onclick="abrirPasta()">
         <div class="row-corpo">
           <div class="row-titulo">Abrir pasta</div>
@@ -758,6 +776,16 @@ async function gerarAudio() {
   } catch (e) { toast(e.message); }
 }
 
+async function apararPausas() {
+  if (!confirm("Isso encurta o áudio e reescreve o blocos.srt.\n\n" +
+               "Se você já gravou o avatar no HeyGen, ele vai ficar fora de sincronia " +
+               "e terá que ser refeito com o áudio novo.\n\nAparar mesmo?")) return;
+  try {
+    st.video = await api(`/api/videos/${st.video.id}/aparar`, { method: "POST" });
+    pintarVideo();
+  } catch (e) { toast(e.message); }
+}
+
 async function abrirPasta() {
   try { await api(`/api/videos/${st.video.id}/pasta`, { method: "POST" }); }
   catch (e) { toast(e.message); }
@@ -849,6 +877,7 @@ async function carregarVozes(pagina) {
         <div class="row-corpo">
           <div class="row-titulo">${esc(v.nome)}</div>
           <div class="row-sub">${v.genero === "female" ? "feminina" : "masculina"}${
+            v.origem ? " · " + esc(v.origem) : ""}${
             v.id === atual ? " · em uso" : ""}</div>
         </div>
         <button class="btn-mini">${v.id === atual ? "✓" : "usar"}</button>

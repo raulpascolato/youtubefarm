@@ -36,7 +36,11 @@ PRODUTO_VAZIO = {
 # o modelo, anexa o avatar no Claude e cola a resposta de volta aqui.
 # Profissao NAO entra: nao da' pra deduzir de uma foto, e vem do molde sozinha — nos 3
 # roteiros do canal de referencia o bloco de profissao e' identico palavra por palavra.
-MODELO_PERSONAGEM = """Nome:
+# O idioma entra na FICHA, nao so' no cadastro do canal: a ficha e' o que voce cola
+# no projeto do Claude que escreve as descricoes, e la' fora ele nao tem acesso ao
+# cadastro. Sem essa linha ele ficava adivinhando o idioma pelo roteiro.
+MODELO_PERSONAGEM = """Idioma:
+Nome:
 Idade:
 Onde ele mora / a região:"""
 
@@ -265,6 +269,8 @@ class Store:
                 "audio_erro": "",
                 "audio_path": "",
                 "srt_path": "",
+                # quantos segundos de pausa foram aparados (0 = ainda nao aparou)
+                "aparado_s": 0,
                 "pasta": "",
                 # aviso da checagem de produto (roteiro vendeu algo que o canal nao tem)
                 "aviso": "",
