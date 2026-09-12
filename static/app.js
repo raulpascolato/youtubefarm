@@ -776,10 +776,11 @@ async function gerarAudio() {
   } catch (e) { toast(e.message); }
 }
 
+/* Sem caixa de confirmação: o confirm() do navegador desenha o diálogo do sistema,
+   com "127.0.0.1:8777 diz" no cabeçalho, e destoa do resto do app. O aviso de que
+   isso invalida o avatar mora na linha de baixo do próprio botão, e o audio.mp3
+   antigo fica guardado como audio_original.mp3 — dá pra voltar atrás. */
 async function apararPausas() {
-  if (!confirm("Isso encurta o áudio e reescreve o blocos.srt.\n\n" +
-               "Se você já gravou o avatar no HeyGen, ele vai ficar fora de sincronia " +
-               "e terá que ser refeito com o áudio novo.\n\nAparar mesmo?")) return;
   try {
     st.video = await api(`/api/videos/${st.video.id}/aparar`, { method: "POST" });
     pintarVideo();
