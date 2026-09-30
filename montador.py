@@ -158,7 +158,8 @@ def _kenburns(dur, variacao, render=None, pulo=0):
 def importar_broll(pasta_dark, pasta_broll, destino):
     """Traz o que o DarkPlanner baixou pra dentro da pasta do video.
 
-    O nome do arquivo comeca com o numero do prompt (5_algum_texto.jpg). O flow_map.csv
+    O nome do arquivo comeca com o numero do prompt (5_algum_texto.jpg, ou 5.jpg quando vem
+    do Flow Multi Prompt). O flow_map.csv
     diz qual bloco e' aquele prompt. Entao 5 -> bloco 8 -> bloco_008.jpg.
     """
     pasta_dark, destino = Path(pasta_dark), Path(destino)
@@ -173,7 +174,8 @@ def importar_broll(pasta_dark, pasta_broll, destino):
         if not p.is_dir():
             return achados
         for f in p.iterdir():
-            m = re.match(r"^(\d+)_", f.name)
+            # 5_algum_texto.jpg (DarkPlanner) ou 5.jpg (Flow Multi Prompt)
+            m = re.match(r"^(\d+)(?=[_.])", f.name)
             if m and f.suffix.lower() in exts:
                 achados.setdefault(int(m.group(1)), f)
         return achados

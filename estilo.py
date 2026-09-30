@@ -8,10 +8,16 @@ O SUFIXO existe porque os geradores puxam sozinhos pro look cinematografico (4K,
 color grading) e isso denuncia que e' IA. O sufixo empurra pro lado oposto: luz fraca e
 chapada, cor suja, foto de camera basica. E' o que vende a ilusao de foto real.
 
-ATENCAO — nao volte a palavra "camcorder" nem "home video" aqui. Elas traziam junto o
-carimbo de data queimado no canto ("DEC 24 1998"): pro gerador a data faz parte da
-estetica de camcorder, entao o "no text" nao segurava. O look agora e' de FOTO tirada
-numa camera digital basica, que nao carimba nada.
+SOBRE A DATA QUEIMADA NO CANTO — historia que vale ler antes de mexer aqui.
+A palavra "camcorder" ja' trouxe o carimbo "DEC 24 1998" no canto das imagens: pro
+gerador a data faz parte da estetica de filmadora, e o "no text" que existia na epoca
+nao segurava. A correcao de entao trocou DUAS coisas de uma vez — tirou "camcorder" E
+acrescentou os negativos explicitos de data — entao nunca se soube qual das duas
+resolveu.
+Testado depois, separadamente: "camcorder" CONVIVE com os negativos explicitos de data
+sem carimbar nada. O que nao segurava era o "no text" generico; "no date stamp, no
+timestamp, no burned-in date or time in the corner" e' especifico e segura.
+Conclusao pratica: a palavra pode ficar, os negativos de data NAO podem sair.
 """
 
 import re
@@ -37,16 +43,22 @@ BLOCO_MAX_S = 8
 # Ele vai colado em TODOS os prompts de TODOS os canais — se listar "tabua de madeira,
 # potes de vidro", o gerador poe isso em toda imagem (aconteceu) e um canal que nao
 # seja de cozinha sai errado.
+# Saiu o look de FOTO de camera compacta de 2007 e entrou o de FRAME DE FITA. Duas
+# coisas mudaram junto e sao deliberadas:
+#   - a luz agora e' estourada de proposito ("auto-exposure with slightly blown-out
+#     highlights"). A versao anterior mandava o oposto ("Even light... no blown-out
+#     highlights") porque na epoca a reclamacao era iluminacao de janela estourada.
+#     Agora o estourado E' a estetica pedida.
+#   - saiu "The subject fills the entire frame, photographed from close range", que
+#     brigava com as regras de distancia: o sufixo pedia close em TODO prompt enquanto
+#     o diretor escrevia "Wide shot of...". Quem manda na distancia agora e' o diretor.
 SUFIXO = (
-    "Amateur snapshot taken in 2007 on a compact digital point-and-shoot camera. "
-    "The subject fills the entire frame, photographed from close range. "
-    "Even light, the subject evenly and clearly lit: no blown-out highlights, "
-    "no harsh backlight, no dark corners. "
-    "Flat natural color, slightly off auto white balance, small-sensor deep focus, "
-    "mild noise and light JPEG softness. Ordinary and unstyled, nothing arranged "
-    "for a photo. "
-    "NOT cinematic: no studio lighting, no HDR, no bokeh, no drone, no film look, "
-    "no lens flare, no styling. "
+    "Filmed as real amateur footage on a cheap old consumer camcorder. "
+    "NOT cinematic: low-quality handheld home video, auto-exposure with slightly "
+    "blown-out highlights, flat low contrast, washed-out muted colors, soft and "
+    "slightly out of focus, visible video compression and light grain, mundane "
+    "candid framing, no cinematic lighting, no HDR, no color grading, no drone, "
+    "no film look. Authentic rural home video, low resolution. "
     "No date stamp, no timestamp, no burned-in date or time in the corner, "
     "no text, no captions, no watermark, no logo."
 )
@@ -90,8 +102,8 @@ REGRAS = [
     "aberto, preco). O gerador rabisca letra errada e denuncia que e' IA.",
     "NUNCA peca look cinematografico: nada de drone, aereo, 4K, bokeh de cinema, "
     "iluminacao de estudio, hiper-nitido.",
-    "NUNCA escreva camcorder, VHS, home video, 1080p footage nem nada que sugira "
-    "filmadora antiga: o gerador queima a data no canto quando ve isso.",
+    "NAO ESCREVA A CAMERA. O sufixo ja' diz em que ela foi filmada, igual pra todo "
+    "bloco. Repetir aqui (camcorder, VHS, 1080p, filmadora antiga) so' briga com ele.",
     "NAO ESCREVA A LUZ. Nada de 'bright daylight', 'soft light', 'lit by a window'. "
     "A luz inteira ja' vem no sufixo; repetir aqui briga com ele e estoura a imagem. "
     "Medido: 99% dos prompts da 1a leva traziam luz propria.",
@@ -102,7 +114,7 @@ REGRAS = [
     "VARIE A DISTANCIA, NAO SO' O ANGULO. Close nao pode ser o padrao de tudo: trinta "
     "closes seguidos cansam mesmo cada um sendo bonito. Alterne entre quatro distancias "
     "ao longo do video, mais ou menos em partes iguais:\n"
-    "      MACRO   — so' um pedaco da coisa, textura, detalhe\n"
+    "      MACRO   — a coisa bem de perto, mas INTEIRA e reconhecivel\n"
     "      CLOSE   — a coisa inteira preenchendo o quadro\n"
     "      MEDIO   — a coisa mais as maos ou a pessoa que a manuseia, de lado ou de costas\n"
     "      ABERTO  — o lugar onde aquilo acontece, com a coisa dentro dele\n"
@@ -177,6 +189,17 @@ REGRAS = [
     "mostre so' a coisa. Nunca alguem de frente falando: esse e' o avatar.",
     "A cena tem que caber na duracao do bloco: um bloco de 4s nao comporta uma acao "
     "com comeco, meio e fim.",
+    "MACRO E' DE COISA, NUNCA DE SUPERFICIE. De perto a coisa tem que continuar "
+    "RECONHECIVEL: quem olhar precisa saber o que esta' vendo sem ouvir a narracao. "
+    "O teste e' um so': da' pra nomear o sujeito numa palavra? 'sal', 'cerveja', "
+    "'faca' passa. 'o fundo do recipiente', 'a linha marrom por dentro', 'a pelicula "
+    "em cima da tabua', 'o vapor saindo de algum lugar' NAO passa — isso e' "
+    "superficie, e de perto vira textura abstrata que nao diz nada e trava a "
+    "sequencia. Medido nos videos prontos: em 11 dos 27 macros o sujeito era "
+    "superficie, e sao exatamente os que estragam. Se o que voce ia mostrar e' uma "
+    "superficie, suba pra CLOSE e mostre a coisa inteira, ou escolha outro sujeito. "
+    "Isso vale pra qualquer canal: o que muda de nicho pra nicho e' QUAL coisa, nao "
+    "a diferenca entre uma coisa e a casca dela.",
     "CADA BLOCO E' UMA FRASE INTEIRA — a imagem e' DAQUELA FRASE, nao do paragrafo. "
     "Os blocos sao cortados nas pausas reais da narracao, entao cada um comeca quando "
     "um pensamento comeca e acaba quando ele acaba. Leia a frase do bloco e pergunte: "
