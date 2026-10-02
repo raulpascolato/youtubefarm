@@ -223,8 +223,11 @@ LUZ_TRECHO = re.compile(
 
 
 # adjetivo de luz que sobra pendurado depois de cortar o trecho ("..., warm" )
+# O \b no comeco nao e' decoracao: sem ele a regex comia o FIM de qualquer palavra
+# terminada em um desses adjetivos. "from below" virava "from be" — medido, aconteceu
+# em 4 dos 91 prompts assim que entrou o angulo "from below" na lista.
 ADJ_SOLTO = re.compile(
-    r"[\s,;]*(soft|bright|warm|cool|natural|dim|even|diffuse|indoor|overhead|"
+    r"[\s,;]*\b(soft|bright|warm|cool|natural|dim|even|diffuse|indoor|overhead|"
     r"gentle|pale|low|flat|muted|golden|harsh|strong)\s*$", re.I)
 
 

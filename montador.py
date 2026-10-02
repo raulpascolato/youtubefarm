@@ -319,19 +319,66 @@ def seg_video(clipe, dur, saida, vf=None):
           "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 
+# A capa nao para depois de cair: fica boiando. Amplitude pequena e periodo longo de
+# proposito — 10px em 3,4s le' como "flutuando"; mais que isso vira gangorra e chama
+# atencao pra animacao em vez do produto.
+CARD_BOIA_PX, CARD_BOIA_S = 10, 3.4
+# A seta vai e volta na direcao do QR, mais rapido que a capa: ela e' um chamado, nao
+# um enfeite. O balanco e' so' pra DIREITA do ponto de repouso, puxando o olho pro QR.
+CARD_SETA_PX, CARD_SETA_S = 16, 1.3
+
+
+def _deslocar(dx="0", dy="0"):
+    """Translada uma camada em SUBPIXEL, pra o movimento nao sair aos trancos.
+
+    O overlay posiciona em pixel INTEIRO. Com um movimento lento — a seta anda 0,36px
+    por quadro — ele trava varios quadros e depois salta 2px de uma vez: medido no card
+    antigo, 19 de 35 quadros parados na seta e 27 de 35 na capa. Na tela isso le' como
+    animacao travada, e aumentar o fps nao resolveria: travaria o dobro de quadros e
+    saltaria os mesmos 2px.
+
+    O perspective reamostra em subpixel. Medido depois da troca: 0 quadros parados,
+    passo continuo de 0,08 a 0,97px.
+
+    sense=source: os cantos informados dizem de ONDE o pixel vem, entao pra levar o
+    conteudo +dx pra direita a origem anda -dx.
+
+    E' 'on', nao 't': o perspective nao conhece a variavel t, so' o numero do quadro —
+    passar t da' "Could not open encoder before EOF", sem dizer o motivo.
+    """
+    return (f"perspective=x0='-({dx})':y0='-({dy})':x1='W-({dx})':y1='-({dy})':"
+            f"x2='-({dx})':y2='H-({dy})':x3='W-({dx})':y3='H-({dy})':"
+            f"interpolation=cubic:sense=source:eval=frame")
+
+
 def seg_card(camadas, dur, saida):
-    """A capa entra caindo de cima enquanto o texto aparece em fade, logo depois."""
+    """A capa cai de cima e fica boiando; o texto e o QR entram em fade; a seta balanca.
+
+    Cada coisa e' uma camada propria porque cada uma se move de um jeito. Somar os
+    movimentos na mesma imagem obrigaria a redesenhar tudo a cada quadro.
+    """
     cai, fade_capa, fade_txt = 0.55, 0.45, 0.65
+    t = f"(on/{FPS})"
+    # a queda e a boia SOMAM: a queda zera em 0,65s e dali pra frente so' sobra a boia
+    queda = f"-70*max(0,1-({t}-0.10)/{cai})"
+    boia = f"{CARD_BOIA_PX}*sin(2*PI*{t}/{CARD_BOIA_S})"
+    balanco = f"{CARD_SETA_PX}*(0.5-0.5*cos(2*PI*{t}/{CARD_SETA_S}))"
     fc = [
-        f"[1:v]fade=in:st=0.10:d={fade_capa}:alpha=1[capa]",
-        f"[2:v]fade=in:st=0.55:d={fade_txt}:alpha=1[txt]",
-        f"[0:v][capa]overlay=x=0:y='-70*max(0,1-(t-0.10)/{cai})':format=auto[a]",
-        f"[a][txt]overlay=0:0,fps={FPS},setsar=1[v]",
+        f"[1:v]format=rgba,fade=in:st=0.10:d={fade_capa}:alpha=1,"
+        f"{_deslocar(dy=f'({queda})+({boia})')}[capa]",
+        f"[2:v]format=rgba,fade=in:st=0.55:d={fade_txt}:alpha=1[txt]",
+        f"[3:v]format=rgba,fade=in:st=0.90:d=0.45:alpha=1,{_deslocar(dx=balanco)}[seta]",
+        "[0:v][capa]overlay=0:0[a]",
+        "[a][txt]overlay=0:0[b]",
+        f"[b][seta]overlay=0:0,fps={FPS},setsar=1[v]",
     ]
-    _run(["-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["fundo"],
-          "-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["capa"],
-          "-loop", "1", "-t", f"{dur:.3f}", "-i", camadas["texto"],
-          "-filter_complex", ";".join(fc), "-map", "[v]",
+    # -framerate antes de cada -i: imagem parada entra a 25fps por padrao no ffmpeg, e
+    # o 'on' das expressoes contaria errado — o mesmo tropeco dos blocos de imagem.
+    entradas = []
+    for chave in ("fundo", "capa", "texto", "seta"):
+        entradas += ["-framerate", str(FPS), "-loop", "1", "-t", f"{dur:.3f}",
+                     "-i", camadas[chave]]
+    _run([*entradas, "-filter_complex", ";".join(fc), "-map", "[v]",
           "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 

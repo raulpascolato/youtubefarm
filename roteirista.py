@@ -209,6 +209,15 @@ pode sair no seu texto é "{nome}" e o único endereço é "{site}".
 
 COMO ANUNCIAR — uma vez só, entre 10% e 20% do roteiro:
 
+ANTES DE ESCREVER, PROCURE O GANCHO QUE JÁ ESTÁ NO SEU PRÓPRIO ROTEIRO.
+Leia o que você já escreveu e veja se o narrador mencionou alguma coisa que tenha
+a ver com o produto — um caderno onde ele anota, uma lata, um costume dele, uma
+pergunta que alguém fez a ele. Quase sempre tem, porque o produto nasceu da mesma
+vida que o roteiro conta. O anúncio sai DALI e não parece colado.
+Se o gancho estiver alguns pontos fora da janela de 10% a 20%, vá até ele. A janela
+é o alvo; o gancho é melhor que o alvo. Só não passe da metade do vídeo.
+Se não houver gancho nenhum, aí sim escreva o anúncio do zero, dentro da janela.
+
 O anúncio não é um intervalo comercial. É uma história curta que explica POR QUE o
 produto existe, e essa explicação é o que prova a autoridade do narrador. Observe como
 os roteiros de treino fazem e reproduza o mecanismo:
@@ -217,6 +226,10 @@ os roteiros de treino fazem e reproduza o mecanismo:
    cansou de repetir a mesma resposta. Nunca "eu criei um produto incrível".
 2. Uma piada com ele mesmo ou uma farpa carinhosa em alguém. Tira o cheiro de venda.
 3. O nome do produto, dito com naturalidade, e onde achar: "{site}".
+   Nesse exato momento aparece na tela um cartão com a capa, o endereço e um QR CODE.
+   Mande a pessoa usar: uma frase curta, do jeito que ELE falaria, dizendo pra apontar
+   a câmera do celular pro código que está na tela, ou pegar o link na descrição.
+   Uma frase só, sem insistir, sem repetir o endereço depois.
 4. Saída rápida. Uma frase curta e volta pro assunto ("Enfim, voltando").
 
 NÃO liste características, não prometa resultado, não fale em preço, não use palavra de
