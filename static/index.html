@@ -93,8 +93,12 @@
       <div class="nav-right"><button class="icon-btn" data-act="novo-modelo" title="Novo modelo">+</button></div>
     </header>
     <h1 class="large-title">Modelos</h1>
-    <p class="sub">Cada modelo é um arquivo com roteiros do canal. O roteiro novo é
-       escrito imitando esses.</p>
+    <div class="segmented" id="modelos-tipo">
+      <button class="seg ativo" data-v="roteiro">Roteiro</button>
+      <button class="seg" data-v="descricao">Descrição</button>
+    </div>
+    <p class="sub" id="modelos-sub">Cada modelo é um arquivo com roteiros do canal. O roteiro
+       novo é escrito imitando esses.</p>
     <div id="lista-modelos"></div>
   </section>
 
@@ -106,12 +110,20 @@
       <div class="nav-right"></div>
     </header>
     <h1 class="large-title">Ajustes</h1>
-    <div class="group-label">Chave da API do Claude</div>
+    <div class="group-label">Claude</div>
     <div class="group">
-      <label class="row field">
-        <input id="cfg-key" type="password" placeholder="sk-ant-..." autocomplete="off">
-      </label>
+      <div class="row">
+        <div class="row-corpo">
+          <div class="row-titulo" id="cc-titulo">Claude Code</div>
+          <div class="row-sub" id="cc-sub">verificando…</div>
+        </div>
+      </div>
+      <button class="row" id="cc-botao" onclick="claudeBotao()">
+        <div class="row-corpo"><div class="row-titulo" id="cc-acao">…</div></div>
+      </button>
     </div>
+    <div class="group-nota">O roteiro e a direção usam o Claude Code deste PC, com o limite
+      do plano da conta conectada. Para trocar de conta, desconecte e entre na outra.</div>
 
     <div class="group-label">Chave do DarkPlanner (voz)</div>
     <div class="group">
@@ -123,14 +135,16 @@
     <div class="group-label">Modelo</div>
     <div class="group">
       <label class="row field">
-        <span class="field-nome">Modelo</span>
-        <select id="cfg-modelo">
-          <option value="claude-opus-5">Claude Opus 5</option>
-          <option value="claude-sonnet-5">Claude Sonnet 5</option>
-          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
-        </select>
+        <span class="field-nome">Roteiro e descrição</span>
+        <select id="cfg-modelo"></select>
+      </label>
+      <label class="row field">
+        <span class="field-nome">Prompts (direção)</span>
+        <select id="cfg-modelo-direcao"></select>
       </label>
     </div>
+    <div class="group-nota">Sempre com esforço alto. Os mais fortes gastam mais do limite
+      do plano.</div>
     <div class="pad"><button class="btn" data-act="salvar-cfg">Salvar</button></div>
 
     <div class="group-label">Atualização</div>

@@ -323,8 +323,8 @@ def montar(pasta, canal, tamanho=(L, A)):
     texto = _camada_texto(
         kicker_do_idioma(canal.get("idioma")),
         nome,
-        # o campo manual manda; vazio, entra a assinatura automatica
-        (canal.get("produto_desc") or "").strip() or assinatura(canal),
+        # nao existe mais descricao manual do produto: e' sempre a assinatura automatica
+        assinatura(canal),
         site,
         destaque,
         tem_capa,

@@ -43,6 +43,8 @@ def tem_ffmpeg():
 
 
 def dir_saida():
-    """Onde caem os arquivos de cada video (audio, srt, prompts, o mp4 final).
-    Fica na area de trabalho de proposito: esses arquivos voce abre e usa por fora."""
-    return Path.home() / "Desktop" / "YOUTUBE FARM - videos"
+    """Onde ficam os arquivos de TRABALHO de cada video (audio, srt, prompts, imagens,
+    o mp4 montado). Dentro do app, em data/videos: antes era uma pasta na area de
+    trabalho, que enchia de lixo. O video pronto o usuario salva onde quiser (o app
+    pergunta), e apagar o video no app apaga a pasta dele daqui."""
+    return RAIZ / "data" / "videos"

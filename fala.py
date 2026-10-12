@@ -21,6 +21,10 @@ from pathlib import Path
 from caminhos import ffmpeg
 
 SEM_JANELA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# O stderr do ffmpeg vem em UTF-8 e repete o caminho do arquivo. Sem encoding explicito o
+# Python le' em cp1252, e numa pasta com acento ("Área de Trabalho") a leitura quebra numa
+# thread a parte: stderr volta vazio, nenhuma pausa e' achada e o alinhar segue sem encaixe,
+# calado. O errors="replace" e' por garantia — o que importa aqui sao so' os numeros.
 
 # -30dB / 0,2s: medido nas tres combinacoes (-35/0.15, -30/0.20, -25/0.25) no audio real.
 # A de -25dB pegava respiracao no meio de frase como se fosse pausa; a de -35dB perdia
@@ -46,7 +50,8 @@ def pausas(audio):
     r = subprocess.run(
         [ffmpeg(), "-hide_banner", "-i", str(audio), "-af",
          f"silencedetect=noise={RUIDO_DB}dB:d={PAUSA_MIN_S}", "-f", "null", "-"],
-        capture_output=True, text=True, creationflags=SEM_JANELA)
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        creationflags=SEM_JANELA)
     saida = r.stderr or ""
     ini = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", saida)]
     fim = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", saida)]
@@ -201,7 +206,8 @@ def silencios(audio):
     r = subprocess.run(
         [ffmpeg(), "-hide_banner", "-i", str(audio), "-af",
          f"silencedetect=noise={RUIDO_DB}dB:d={PAUSA_MIN_S}", "-f", "null", "-"],
-        capture_output=True, text=True, creationflags=SEM_JANELA)
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        creationflags=SEM_JANELA)
     saida = r.stderr or ""
     ini = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", saida)]
     fim = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", saida)]
@@ -211,7 +217,8 @@ def silencios(audio):
 def _formato(audio):
     """(taxa de amostragem, canais) do arquivo, lidos do cabecalho pelo ffmpeg."""
     r = subprocess.run([ffmpeg(), "-hide_banner", "-i", str(audio)],
-                       capture_output=True, text=True, creationflags=SEM_JANELA)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       creationflags=SEM_JANELA)
     t = r.stderr or ""
     m = re.search(r"Audio:.*?(\d{4,6}) Hz,\s*(mono|stereo|(\d)(?:\.\d)? channels)", t)
     if not m:

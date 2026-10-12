@@ -2,15 +2,15 @@
 """Direcao: le o blocos.srt e decide o que aparece na tela em cada bloco.
 
 Entra: o SRT de blocos que o DarkPlanner devolveu junto com o audio.
-Sai: os 5 arquivos, no mesmo formato do 100k —
+Sai: os arquivos que o montador e o Flow esperam —
   plano.json        alimenta o montador
-  prompts_flow.txt  cola no batch do Flow (uma linha [I] por prompt)
+  prompts_flow.txt  cola no multiprompt do DarkPlanner (uma linha [I] por imagem)
   flow_map.csv      renomeia os downloads na ordem certa
-  reais_map.csv     blocos que precisam de material REAL (stock), nao de IA
   preview.txt       confere o plano com o olho
 
 A direcao NAO decide quanto dura cada bloco — isso ja veio pronto do SRT. Ela decide
-o TIPO de cada bloco e escreve os prompts.
+o TIPO de cada bloco (avatar, imagem ou card) e escreve os prompts de imagem.
+So' imagem: o b-roll nao tem mais video.
 """
 import csv
 import json
@@ -48,123 +48,123 @@ SYSTEM = """Você é o diretor de fotografia de um canal do YouTube narrado, est
 
 O vídeo já existe como narração: uma lista de blocos com tempo exato e o texto falado
 em cada um. Sua tarefa é decidir O QUE APARECE NA TELA em cada bloco e escrever os
-prompts de geração.
+prompts de IMAGEM.
 
 ═══ OS TIPOS ═══
 
 avatar — o narrador aparece falando. Use para: a abertura, apresentações pessoais,
          opiniões, viradas de assunto, o fecho. É a âncora que costura o vídeo.
-imagem — uma foto parada (o montador aplica zoom lento por cima). É a maioria.
-video  — filmagem com movimento real DENTRO da cena (mãos mexendo, vapor subindo,
-         alguém girando um objeto na luz). Use só quando o movimento for o assunto.
+imagem — uma FOTO parada (o montador aplica zoom lento por cima). Não existe vídeo:
+         todo b-roll é imagem.
 {tipo_card}
 
 ═══ A MISTURA ALVO ═══
 
-Aproximadamente: {p_avatar}% avatar · {p_imagem}% imagem · {p_video}% vídeo.
+Aproximadamente: {p_avatar}% avatar · {p_imagem}% imagem.
 É uma base, não uma cota rígida — o conteúdo manda. Mas não fuja muito.
-O avatar volta a cada {entre} b-rolls mais ou menos, em blocos isolados.
-Imagem é o padrão; só escolha vídeo quando algo precisa se mexer.
+Avatar e imagem se alternam: entre uma aparição do avatar e a próxima entram 1 ou
+{entre} imagens. E o avatar não fica mais que uns {avatar_max} segundos seguidos na tela —
+num trecho longo de fala abstrata, intercale uma imagem do assunto.
+
+═══ O LOOK ═══
+
+FOTO REALISTA DOCUMENTAL — nem cinematográfica, nem caseira e degradada. Parece foto de
+verdade, tirada por um fotógrafo de reportagem na altura dos olhos: luz NATURAL (dia
+nublado suave, luz da janela da cozinha ou da garagem), cores fiéis, textura real de
+pele, tecido, madeira, metal. Pessoas comuns e críveis (rugas, mãos calejadas, roupa de
+trabalho), cenário do dia a dia do país de quem narra. LIMPO E CUIDADO: panelas, fogão
+e bancada como numa casa bem cuidada — nunca encardidos. O OPOSTO de render 3D,
+ilustração, comercial de estúdio ou foto hiper-polida.
 
 ═══ COMO ESCREVER O prompt_imagem ═══
 
-Em INGLÊS. Descreva a cena concreta e visual, com enquadramento e luz. Sem ponto final.
+Em INGLÊS. A cena concreta e visual: distância e assunto na primeira parte, o ângulo,
+e a LUZ do lugar no fim, em poucas palavras. Sem ponto final.
 Use estes modificadores quando couberem: {mods}
 NUNCA escreva estas palavras no prompt: {proibidos}
 
 Os exemplos abaixo são de canais diferentes de propósito, e em distâncias diferentes.
-Copie a FORMA — uma distância dita na primeira palavra, um assunto, curto, sem luz —
-nunca o conteúdo.
+Copie a FORMA — uma distância dita na primeira palavra, um assunto, o ângulo, a luz do
+lugar, curto — nunca o conteúdo.
 
-  "Macro of a thick pat of butter half sunk in a bowl of clear water"
-  "Close-up of a slice of fried bologna in a black cast iron pan"
-  "Medium shot of two hands lifting a heavy pot off a stove, seen from the side"
-  "Wide shot of a small farm kitchen with a pot steaming on the stove"
-  "Macro of a rusted bolt head on a car engine block"
-  "Medium shot of a man from behind tightening a bolt under a raised car"
-  "Wide shot of a repair shop with a car up on the lift"
-  "Close-up of a coil of frayed rope on a boat deck"
+  "Macro of a thick pat of butter half sunk in a bowl of clear water, soft kitchen window light"
+  "Close-up of a slice of fried bologna in a clean black cast iron pan, from the side, overcast daylight"
+  "Medium shot of an older man's hands lifting a heavy pot off a stove, seen from the side, kitchen window light"
+  "Wide shot of a tidy farmhouse kitchen with a pot steaming on the stove, soft morning light"
+  "Macro of a bolt head on a car engine block, garage window light"
+  "Medium shot of an older man in work gloves tightening a bolt under a raised car, from behind, workshop lamp light"
+  "Wide shot of a small home garage with a car up on the lift, overcast daylight through the open door"
+  "Close-up of a coil of rope on a boat deck, from above, overcast daylight"
 
 Exemplos do tom ERRADO, todos tirados de uma leva real:
   "Close-up of a rustic pantry shelf lined with glass jars of preserved vegetables and
    dried beans, a small basket of potatoes beside them, soft daylight"
-   -> uma prateleira cheia não é close, e a luz não é sua pra escrever
+   -> uma prateleira cheia não é close: são dez assuntos e nenhum principal
   "Close-up of a worn notebook lying closed on a wooden kitchen table, a pencil resting
    beside it, bright daylight from a kitchen window"
-   -> dois objetos, a mesa, a janela e a luz. Era pra ser só o caderno preenchendo o quadro
+   -> caderno, lápis, mesa e janela. Era pra ser só o caderno preenchendo o quadro
   "Close-up of a plain empty stoneware pot sitting on a wooden table"
    -> a fala daquele bloco era sobre MANTEIGA. Você trocou a coisa pelo vasilhame vazio
   "Close-up of an old iron stove with a bolt visible on its side"
    -> objeto de ambiente escolhido ao acaso porque a fala era abstrata. Mostre a coisa
       concreta do assunto mais próximo
+  "Close-up of a greasy, burnt, crusted frying pan on a dirty stove"
+   -> a fala não era sobre sujeira. Panela e fogão aparecem limpos e bem cuidados
 
-NÃO escreva o sufixo de estilo — ele é acrescentado depois, automaticamente.
-
-═══ COMO ESCREVER O prompt_movimento ═══
-
-Só para tipo "video". Uma frase curta em inglês dizendo o que se MOVE, sabendo que a
-imagem já existe e vai ser animada. Sem luz, sem cenário, só o movimento. Exemplos:
-  "Steam rising slowly off the surface, handheld slightly unsteady"
-  "Syrup drips thickly down both sides, static composition"
-  "The wheel turns half a rotation, handheld slightly trembling"
-Para avatar e imagem, deixe vazio.
+NÃO escreva o sufixo de estilo nem a câmera — eles são acrescentados depois,
+automaticamente.
 
 ═══ UM TRECHO INTEIRO, DIRIGIDO CERTO ═══
 
 Isto é a abertura de UM vídeo real, bloco a bloco. Não é um roteiro do canal e não
 é um molde a seguir: é só para você ver COMO se decide bloco a bloco — quando é
-avatar, quando é plano aberto, quando é vídeo. A sequência de planos aqui serve a
+avatar, quando é plano aberto, quando são mãos. A sequência de planos aqui serve a
 ESTE texto; o seu texto pede outra.
 
   "The pan came up out of a cardboard box in a basement in Iowa."
       avatar — ele está se apresentando ao assunto
 
   "A 9x13 aluminum pan dented along one edge with a strip of masking tape underneath."
-      imagem · top-down da forma virada, a fita aparecendo
+      imagem · top-down da forma virada, a fita aparecendo, luz da janela do porão
 
   "On the tape in black marker the name Toliffson with one line drawn through it."
-      imagem · MESMA fita, agora de lado e mais perto, só o nome riscado
-
-  "Above that in a different hand it said Howland."
-      imagem · MESMA fita, mais perto ainda, o segundo nome
+      imagem · MESMA fita, agora de lado e mais perto, o nome fora de foco
+      >>> escrita nunca legível: a IA erra letra e idioma
 
   "That is a pan that outlived one woman and got handed to another."
-      imagem · uma senhora de costas segurando a forma na cozinha
+      avatar — é a tese do bloco, não uma coisa
 
   "I have pulled a pan taped like that out of four houses in three states."
-      vídeo · pessoas andando em frente a um celeiro
-      >>> é vídeo porque a frase é sobre um movimento, não porque é importante
+      imagem · plano aberto de pessoas entrando num salão de igreja, dia nublado
 
   "Different churches, same strip of tape, every time a 9x13."
-      imagem · top-down de três formas iguais sobre uma mesa
+      imagem · de lado, três formas iguais sobre uma mesa, luz de janela
 
   "Nobody tapes her own name to a pan she uses at home."
       avatar — é tese, não é coisa. Não invente objeto pra ilustrar ideia
 
   "You do that for one reason."
-      imagem · close da forma com uma mão colando a fita
+      imagem · mãos de uma senhora colando a fita na forma, de lado, luz da cozinha
+      >>> mãos fazendo a tarefa: o momento exato do gesto
 
   "The house belonged to Vera Howland."
-      imagem · PLANO ABERTO de uma casa simples de roça, vista da rua
+      avatar
 
   "87 when she died, belonged to Emanuel Lutheran for 61 years."
-      imagem · PLANO ABERTO, uma igreja de longe, árvores e a estrada
+      imagem · PLANO ABERTO, uma igreja de longe, árvores e a estrada, dia nublado
       >>> lugar não se mostra em macro
 
   "I do the bedrooms first, then the closets, then the basement."
-      vídeo · um homem de costas andando pela cozinha
+      imagem · um homem mais velho de costas carregando uma caixa num corredor de casa
 
   "The pan was in the basement."
-      imagem · um canto de porão com caixas e vidros, altura do olho
+      avatar
 
   "What was in the kitchen was better."
       imagem · a geladeira da cozinha, média distância, livros coloridos em cima
 
   "On top of the refrigerator there were nine spiralbound cookbooks."
-      imagem · MESMA geladeira, close nos livros
-
-  "the kind a church sells for $3 to put a roof on the fellowship hall."
-      imagem · MESMOS livros, close ainda maior, um só deles
+      imagem · MESMOS livros, close, as capas sem escrita legível
 
   "Here is a thing about those books I have never heard anybody say out loud."
       avatar — abre um argumento, não descreve coisa
@@ -180,16 +180,26 @@ Um objeto por bloco recebido, na mesma ordem, com o mesmo "n". Não pule blocos,
 não invente blocos."""
 
 # so' entra no prompt quando o canal tem produto cadastrado
-TIPO_CARD = """card   — o cartão do produto do canal. Use em EXATAMENTE UM bloco do vídeo inteiro:
-         aquele em que o narrador ANUNCIA o produto e diz o site. Deixe prompt_imagem e
-         prompt_movimento vazios — o cartão é desenhado pelo programa, não gerado.
+TIPO_CARD = """card   — o cartão do produto do canal. Marque TODOS OS BLOCOS SEGUIDOS do
+         anúncio, não só um. Deixe prompt_imagem vazio — o cartão é desenhado pelo
+         programa, não gerado.
+
+         O anúncio quase nunca cabe num bloco só. Ele costuma cair em dois ou três:
+         um que diz o nome e o endereço, outro que diz que o cartão está na tela, outro
+         que manda apontar o celular. Marque a sequência inteira. O cartão traz um QR
+         CODE, e quem está vendo precisa de uns {alvo} segundos pra pegar o telefone e
+         enquadrar. Um bloco de três segundos não serve pra nada.
+
+         Comece no primeiro bloco em que ele oferece o produto e pare quando a soma das
+         durações passar de {alvo} segundos, ou quando o assunto voltar pro vídeo —
+         o que vier primeiro. É UMA sequência no vídeo inteiro, não várias.
 
          O produto deste canal é "{nome}" ({site}).
          Ache o bloco do anúncio pelo SENTIDO, não por busca de palavra: a transcrição
          pode ter escrito o nome junto ou separado. É o trecho onde ele oferece o produto
          ao espectador e cita o site.
          Menções de passagem depois ("tem uma página no meu livro sobre isso") NÃO levam
-         card — continuam sendo avatar ou b-roll normal.
+         card — continuam sendo avatar ou imagem normal.
          Se nenhum bloco deste lote for o anúncio, simplesmente não use "card"."""
 
 def _schema(tem_produto):
@@ -203,11 +213,10 @@ def _schema(tem_produto):
                 "properties": {
                     "n": {"type": "integer"},
                     "tipo": {"type": "string",
-                             "enum": ["avatar", "imagem", "video"] + (["card"] if tem_produto else [])},
+                             "enum": ["avatar", "imagem"] + (["card"] if tem_produto else [])},
                     "prompt_imagem": {"type": "string"},
-                    "prompt_movimento": {"type": "string"},
                 },
-                "required": ["n", "tipo", "prompt_imagem", "prompt_movimento"],
+                "required": ["n", "tipo", "prompt_imagem"],
                 "additionalProperties": False,
             },
         }
@@ -221,21 +230,21 @@ def _system(canal=None):
     nome = (canal or {}).get("produto_nome", "").strip()
     site = (canal or {}).get("produto_site", "").strip()
     return SYSTEM.format(
-        tipo_card=TIPO_CARD.format(nome=nome, site=site) if (nome and site) else "",
+        tipo_card=(TIPO_CARD.format(nome=nome, site=site, alvo=int(estilo.CARD_ALVO_S))
+               if (nome and site) else ""),
         p_avatar=round(estilo.MISTURA["avatar"] * 100),
         p_imagem=round(estilo.MISTURA["imagem"] * 100),
-        p_video=round(estilo.MISTURA["video"] * 100),
         entre=estilo.BROLLS_ENTRE_AVATARES,
+        avatar_max=estilo.AVATAR_MAX_S,
         mods=", ".join(estilo.MODIFICADORES_BONS),
         proibidos=", ".join(estilo.MODIFICADORES_PROIBIDOS),
         regras="\n".join(f"- {r}" for r in estilo.REGRAS),
     )
 
 
-def dirigir(api_key, modelo, blocos, tema="", on_status=None, canal=None):
-    """Manda os blocos em lotes e devolve a decisão de cada um."""
-    import anthropic
-    cliente = anthropic.Anthropic(api_key=api_key)
+def dirigir(modelo, blocos, tema="", on_status=None, canal=None):
+    """Manda os blocos em lotes pro Claude Code e devolve a decisão de cada um."""
+    import claude_code
     sistema = _system(canal)
     tem_produto = bool((canal or {}).get("produto_nome") and (canal or {}).get("produto_site"))
     decisoes = {}
@@ -253,85 +262,86 @@ def dirigir(api_key, modelo, blocos, tema="", on_status=None, canal=None):
                    "Estes são blocos do meio do vídeo.")
         linhas = "\n".join(
             f'{b["n"]} | {b["dur"]:.1f}s | {b["texto"]}' for b in lote)
-        # streaming: o SDK recusa max_tokens alto sem stream (a chamada pode passar de
-        # 10 min). O output_config com json_schema garante que o texto volta JSON valido —
+        # o --json-schema do Claude Code garante que volta JSON valido no formato pedido —
         # e' o que resolve o "JSON incompleto, tentando de novo" que o 100k sofria.
-        with cliente.messages.stream(
-            model=modelo,
-            max_tokens=32000,
-            system=[{"type": "text", "text": sistema,
-                     "cache_control": {"type": "ephemeral"}}],
-            output_config={"format": {"type": "json_schema",
-                                      "schema": _schema(tem_produto)}},
-            messages=[{"role": "user", "content":
-                       f"{contexto}{posicao}\n\nBLOCOS (n | duração | texto falado):\n{linhas}"}],
-        ) as fluxo:
-            final = fluxo.get_final_message()
-        bruto = "".join(c.text for c in final.content if c.type == "text")
-        for d in json.loads(bruto).get("blocos", []):
+        r = claude_code.escrever(
+            sistema,
+            f"{contexto}{posicao}\n\nBLOCOS (n | duração | texto falado):\n{linhas}",
+            modelo=modelo, schema=_schema(tem_produto))
+        for d in r.get("blocos", []):
             decisoes[d["n"]] = d
 
     faltando = [b["n"] for b in blocos if b["n"] not in decisoes]
     if faltando:
         raise RuntimeError(f"a direção não devolveu {len(faltando)} bloco(s): "
                            f"{faltando[:10]}{'…' if len(faltando) > 10 else ''}")
+    return montar_plano(blocos, decisoes)
 
-    # o card e' UM so' no video inteiro. Os lotes nao se enxergam, entao se dois lotes
-    # marcarem card, o primeiro vale e os outros viram avatar (e' onde ele esta falando).
-    ja_teve_card = False
+
+def montar_plano(blocos, decisoes):
+    """Decisoes por bloco -> plano.json. Serve tanto pra direcao da API quanto pra
+    direcao feita a mao (as decisoes sao o mesmo dict {n: {tipo, prompt_imagem}}).
+
+    O card e' UM so' no video inteiro, e cobre o ANUNCIO INTEIRO, nao um bloco. Quando o
+    anuncio caia em tres blocos e so' o primeiro valia, o cartao ficava 3,3s na tela —
+    tempo nenhum pra alguem apontar o celular no QR. Agora aceito blocos SEGUIDOS ate'
+    juntar CARD_ALVO_S, e o montador junta tudo num segmento so'. Os lotes nao se
+    enxergam: se um segundo lote marcar card depois que o anuncio acabou, vira avatar.
+    """
+    card_s, card_aberto, card_fechado = 0.0, False, False
     plano = []
     for b in blocos:
         d = decisoes[b["n"]]
-        tipo = d["tipo"]
+        tipo = d["tipo"] if d["tipo"] in ("avatar", "imagem", "card") else "imagem"
         if tipo == "card":
-            if ja_teve_card:
+            if card_fechado or card_s >= estilo.CARD_ALVO_S:
                 tipo = "avatar"
             else:
-                ja_teve_card = True
+                card_aberto = True
+                card_s += float(b.get("dur") or 0)
+        elif card_aberto:
+            card_fechado = True
+        prompt = (d.get("prompt_imagem") or "").strip() if tipo == "imagem" else ""
+        if tipo == "imagem" and not prompt:
+            tipo = "avatar"           # imagem sem prompt nao tem o que gerar
         plano.append({**b,
                       "tipo": tipo,
                       "fonte": "ia",          # tudo gerado; nao usamos banco de imagens
-                      "prompt_imagem": (d.get("prompt_imagem") or "").strip()
-                                       if tipo not in ("avatar", "card") else "",
-                      "prompt_movimento": (d.get("prompt_movimento") or "").strip()
-                                          if tipo == "video" else "",
+                      "prompt_imagem": prompt,
                       "qr": False,
-                      "arquivo": (f'bloco_{b["n"]:03d}.mp4'
-                                  if tipo in ("imagem", "video") else
+                      "arquivo": (f'bloco_{b["n"]:03d}.jpg' if tipo == "imagem" else
                                   "card_produto.png" if tipo == "card" else "")})
     return plano
 
 
 # ---------------------------------------------------------------- saidas
-ICONE = {"avatar": "AVATAR", "imagem": "IMG   ", "video": "VIDEO ", "card": "CARD  "}
+ICONE = {"avatar": "AVATAR", "imagem": "IMG   ", "card": "CARD  "}
 
 
 def escrever_saidas(plano, pasta):
-    """Grava os 5 arquivos, no formato que o montador e o Flow esperam."""
+    """Grava os arquivos no formato que o montador e o Flow esperam."""
     pasta = Path(pasta)
     pasta.mkdir(parents=True, exist_ok=True)
 
     (pasta / "plano.json").write_text(
         json.dumps(plano, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    # b-roll gerado por IA -> Flow. A ORDEM aqui e' a ordem dos downloads.
-    ia = [b for b in plano if b["tipo"] in ("imagem", "video") and b["fonte"] == "ia"]
+    # imagem gerada por IA -> Flow. A ORDEM aqui e' a ordem dos downloads.
+    ia = [b for b in plano if b["tipo"] == "imagem" and b["fonte"] == "ia"]
     with open(pasta / "prompts_flow.txt", "w", encoding="utf-8") as f:
         for b in ia:
-            f.write(estilo.linha_flow(b["prompt_imagem"], b["prompt_movimento"]) + "\n")
+            f.write(estilo.linha_flow(b["prompt_imagem"]) + "\n")
 
     with open(pasta / "flow_map.csv", "w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["ordem", "bloco", "arquivo_esperado", "tipo", "prompt"])
         for i, b in enumerate(ia, 1):
-            w.writerow([i, b["n"], b["arquivo"], b["tipo"],
-                        estilo.linha_flow(b["prompt_imagem"], b["prompt_movimento"])])
+            w.writerow([i, b["n"], b["arquivo"], b["tipo"], estilo.linha_flow(b["prompt_imagem"])])
 
-    conta = {t: sum(1 for b in plano if b["tipo"] == t)
-             for t in ("avatar", "imagem", "video", "card")}
+    conta = {t: sum(1 for b in plano if b["tipo"] == t) for t in ("avatar", "imagem", "card")}
     with open(pasta / "preview.txt", "w", encoding="utf-8") as f:
         f.write(f"PLANO DE MONTAGEM — {len(plano)} blocos "
-                f"({conta['avatar']} avatar / {len(ia)} b-roll / {conta['card']} card)\n")
+                f"({conta['avatar']} avatar / {len(ia)} imagem / {conta['card']} card)\n")
         f.write("=" * 70 + "\n")
         for b in plano:
             # ordem = o numero com que o arquivo vai voltar do DarkPlanner
@@ -342,9 +352,6 @@ def escrever_saidas(plano, pasta):
             f.write(f'      "{b["texto"][:110]}"\n')
             if b["prompt_imagem"]:
                 f.write(f'      -> {b["prompt_imagem"][:150]}\n')
-            if b["prompt_movimento"]:
-                f.write(f'      ~> {b["prompt_movimento"][:150]}\n')
 
     return {"blocos": len(plano), "avatar": conta["avatar"], "imagem": conta["imagem"],
-            "video": conta["video"], "card": conta["card"], "flow": len(ia),
-            "pasta": str(pasta)}
+            "card": conta["card"], "flow": len(ia), "pasta": str(pasta)}

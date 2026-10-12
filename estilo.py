@@ -1,34 +1,31 @@
 # -*- coding: utf-8 -*-
 """O estilo da casa. Igual pra todo canal — nao e' configuravel de proposito.
 
-Os numeros de MISTURA nao foram chutados: saem da analise de um video de referencia
-(20:04, 191 blocos, linha do tempo continua). Sao share por BLOCO, nao por tempo.
+SO' IMAGEM. O b-roll e' 100% imagem gerada (Flow so' imagem, nada de Veo); o movimento
+vem do Ken Burns do montador. Nao existe mais bloco de video.
 
-O SUFIXO existe porque os geradores puxam sozinhos pro look cinematografico (4K, bokeh,
-color grading) e isso denuncia que e' IA. O sufixo empurra pro lado oposto: luz fraca e
-chapada, cor suja, foto de camera basica. E' o que vende a ilusao de foto real.
-
-SOBRE A DATA QUEIMADA NO CANTO — historia que vale ler antes de mexer aqui.
-A palavra "camcorder" ja' trouxe o carimbo "DEC 24 1998" no canto das imagens: pro
-gerador a data faz parte da estetica de filmadora, e o "no text" que existia na epoca
-nao segurava. A correcao de entao trocou DUAS coisas de uma vez — tirou "camcorder" E
-acrescentou os negativos explicitos de data — entao nunca se soube qual das duas
-resolveu.
-Testado depois, separadamente: "camcorder" CONVIVE com os negativos explicitos de data
-sem carimbar nada. O que nao segurava era o "no text" generico; "no date stamp, no
-timestamp, no burned-in date or time in the corner" e' especifico e segura.
-Conclusao pratica: a palavra pode ficar, os negativos de data NAO podem sair.
+O LOOK e' o do preset "realista_imagem" (engenharia reversa de um canal alemao de
+oficina): FOTO DOCUMENTAL REALISTA, nitida, luz natural, cor fiel. Substituiu o look de
+filmadora velha (luz estourada, cor lavada, grao), que fazia tudo parecer SUJO — as
+panelas e as cozinhas pareciam encardidas e o publico reclamava.
 """
 
-import re
+# Share por BLOCO. Do preset: na referencia o avatar ocupava ~47% do tempo, alternando
+# com trechos de imagem de ~7s.
+MISTURA = {"avatar": 0.45, "imagem": 0.55}
 
-# Share por bloco. Nao e' mais o do video de referencia (15/62/22): com aquilo o video
-# virava enxurrada de imagem, uma por frase, e a maioria nao dizia nada. O avatar passou
-# a ser o padrao e a imagem so' entra quando ganha o lugar.
-MISTURA = {"avatar": 0.360, "imagem": 0.500, "video": 0.140}
+# Quantas imagens seguidas entre uma aparicao do avatar e a proxima. Na referencia eram
+# 76 trechos de avatar contra 77 de imagem (~91 imagens): quase sempre 1, as vezes 2.
+BROLLS_ENTRE_AVATARES = 2
 
-# quantos b-rolls seguidos entre uma aparicao do avatar e a proxima (mediana medida: 4)
-BROLLS_ENTRE_AVATARES = 4
+# Trecho de avatar seguido mais longo, em segundos (avatar_max_seg do preset).
+AVATAR_MAX_S = 15
+
+# Quanto tempo o cartao do produto fica na tela. Nao e' gosto: o cartao traz um QR, e
+# quem esta' vendo precisa pegar o celular, abrir a camera e enquadrar. Medido num video
+# real, o anuncio caiu em tres blocos do SRT e o cartao ficou 3,3s — nao da' pra ninguem.
+# Dez segundos e' o minimo pra alguem conseguir ler o codigo sem pausar o video.
+CARD_ALVO_S = 10
 
 # Tamanho dos pedacos em que a narracao e' picada (vai pro DarkPlanner junto com o audio).
 # Cada pedaco e' uma cena: e' esse numero que decide de quanto em quanto tempo a tela muda.
@@ -39,42 +36,25 @@ BROLLS_ENTRE_AVATARES = 4
 BLOCO_MIN_S = 5
 BLOCO_MAX_S = 8
 
-# REGRA DE OURO DESTE SUFIXO: so' camera. Nunca cenario, nunca assunto, nunca nicho.
-# Ele vai colado em TODOS os prompts de TODOS os canais — se listar "tabua de madeira,
-# potes de vidro", o gerador poe isso em toda imagem (aconteceu) e um canal que nao
-# seja de cozinha sai errado.
-# Saiu o look de FOTO de camera compacta de 2007 e entrou o de FRAME DE FITA. Duas
-# coisas mudaram junto e sao deliberadas:
-#   - a luz agora e' estourada de proposito ("auto-exposure with slightly blown-out
-#     highlights"). A versao anterior mandava o oposto ("Even light... no blown-out
-#     highlights") porque na epoca a reclamacao era iluminacao de janela estourada.
-#     Agora o estourado E' a estetica pedida.
-#   - saiu "The subject fills the entire frame, photographed from close range", que
-#     brigava com as regras de distancia: o sufixo pedia close em TODO prompt enquanto
-#     o diretor escrevia "Wide shot of...". Quem manda na distancia agora e' o diretor.
+# REGRA DE OURO DESTE SUFIXO: so' o LOOK da foto. Nunca cenario, nunca assunto, nunca
+# nicho. Ele vai colado em TODOS os prompts de TODOS os canais — se listar "tabua de
+# madeira, potes de vidro", o gerador poe isso em toda imagem (aconteceu) e um canal que
+# nao seja de cozinha sai errado. Texto exato do preset "realista_imagem".
 SUFIXO = (
-    "Filmed as real amateur footage on a cheap old consumer camcorder. "
-    "NOT cinematic: low-quality handheld home video, auto-exposure with slightly "
-    "blown-out highlights, flat low contrast, washed-out muted colors, soft and "
-    "slightly out of focus, visible video compression and light grain, mundane "
-    "candid framing, no cinematic lighting, no HDR, no color grading, no drone, "
-    "no film look. Authentic rural home video, low resolution. "
-    "No date stamp, no timestamp, no burned-in date or time in the corner, "
-    "no text, no captions, no watermark, no logo."
+    "Photorealistic candid documentary photograph taken with a full-frame camera and a "
+    "35mm lens at eye level, natural soft daylight, true-to-life colors, realistic skin "
+    "and material textures, real everyday setting, sharp focus on the subject, background "
+    "also in focus. Not cinematic, no color grading, no HDR, no studio lighting, not a 3D "
+    "render, not CGI, not an illustration. No readable text, no logos, no captions, no "
+    "watermark."
 )
-
 
 ENQUADRAMENTO = ("16:9 aspect ratio, full frame composition, no blurred background, "
                  "no square crop, no borders.")
 
-# So' angulo e distancia. Luz e textura ja' vem no SUFIXO — repetir aqui e' o que
-# entulhava o prompt e fazia o gerador tentar caber tudo no mesmo quadro.
-#
-# A lista antiga tinha OITO entradas e TRES delas eram a mesma coisa vista de cima
-# ("top-down", "directly overhead", "from just above it"), contra nenhuma de lado e
-# nenhuma de frente. O diretor escolhia honestamente da lista e mesmo assim o video
-# saia com camera de cima o tempo todo. Agora sao oito angulos DIFERENTES entre si,
-# e a distancia (macro/close/medio/aberto) e' escolha separada desta.
+# De onde a camera olha. A distancia (macro/close/medio/aberto) e' escolha separada.
+# Oito angulos DIFERENTES entre si: a lista antiga tinha tres jeitos de dizer "de cima"
+# e o video saia com camera de cima o tempo todo.
 ANGULOS = [
     "from directly above, looking straight down",
     "from the side, at the same height as the subject",
@@ -85,28 +65,52 @@ ANGULOS = [
     "three-quarter view, the subject turned slightly away",
     "from one end, looking along its length",
 ]
-# nome antigo, ainda usado pelo prompt do diretor
-MODIFICADORES_BONS = ANGULOS
+
+# Do preset. O sufixo ja' garante o look; estes o diretor usa POR PLANO, quando cabem.
+MODIFICADORES_BONS = [
+    "eye-level shot", "natural soft overcast daylight", "garage window light",
+    "kitchen window light", "hands doing a task", "older man in work clothes",
+    "work gloves", "weathered real objects", "everyday rural setting",
+    "natural depth, background in focus",
+] + ANGULOS
 
 MODIFICADORES_PROIBIDOS = [
-    "text", "sign", "label", "poster", "newspaper", "book page", "screen", "subtitle",
-    "watermark", "logo", "price tag", "cinematic", "4K", "8K", "hyper detailed",
-    "studio lighting", "drone", "aerial", "teal and orange", "bokeh", "film look",
-    "date stamp", "timestamp", "camcorder", "VHS", "home video", "1080p footage",
+    "text", "sign", "label", "logo", "watermark", "subtitle", "writing", "cinematic",
+    "HDR", "drone", "aerial", "teal and orange", "studio lighting",
+    "professional color grade", "hyperrealistic", "8K", "ultra sharp", "3D render", "CGI",
+    "illustration", "painting", "cartoon", "oversaturated", "fisheye", "plastic skin",
+    # o look antigo de filmadora: e' exatamente o que deixava tudo com cara de sujo
+    "camcorder", "VHS", "grainy",
 ]
 
 # Valem pra QUALQUER canal. Nada aqui pode citar um nicho — o assunto sai do roteiro,
-# nao daqui. Cada regra abaixo nasceu de um defeito medido, nao de palpite.
+# nao daqui. Cada regra nasceu de um defeito medido ou do preset realista_imagem.
 REGRAS = [
-    "NUNCA peca texto na cena (placa, rotulo, embalagem escrita, jornal, tela, livro "
-    "aberto, preco). O gerador rabisca letra errada e denuncia que e' IA.",
-    "NUNCA peca look cinematografico: nada de drone, aereo, 4K, bokeh de cinema, "
-    "iluminacao de estudio, hiper-nitido.",
-    "NAO ESCREVA A CAMERA. O sufixo ja' diz em que ela foi filmada, igual pra todo "
-    "bloco. Repetir aqui (camcorder, VHS, 1080p, filmadora antiga) so' briga com ele.",
-    "NAO ESCREVA A LUZ. Nada de 'bright daylight', 'soft light', 'lit by a window'. "
-    "A luz inteira ja' vem no sufixo; repetir aqui briga com ele e estoura a imagem. "
-    "Medido: 99% dos prompts da 1a leva traziam luz propria.",
+    "NUNCA peca texto legivel na cena (placa, rotulo, embalagem escrita, preco, jornal, "
+    "tela, livro aberto, legenda). O gerador erra letra e idioma e denuncia que e' IA. "
+    "Caderno, papel ou prancheta PODEM aparecer, mas com a escrita fora de foco, ilegivel.",
+    "NUNCA peca look cinematografico ou artificial: nada de drone, aereo, teal-and-orange, "
+    "iluminacao de estudio, HDR, render 3D, CGI, ilustracao, pintura, desenho, pele de "
+    "plastico, cor saturada demais.",
+    "NAO ESCREVA A CAMERA. O sufixo ja' diz que e' foto documental full-frame 35mm, igual "
+    "pra todo bloco. Repetir aqui (camera, lente, 'photorealistic') so' briga com ele.",
+    "ESCREVA A LUZ DO LUGAR, em poucas palavras no fim da cena: dia nublado, luz da janela "
+    "da cozinha, luz da janela da garagem, fim de tarde, lampada de oficina. E' NATURAL e "
+    "COERENTE com o lugar — nunca luz de estudio, nunca luz dramatica.",
+    "LIMPO E CUIDADO, NUNCA ENCARDIDO. Panela, bancada, fogao, louca e ferramenta aparecem "
+    "como numa casa bem cuidada: usados de verdade, mas limpos. Desgaste honesto (madeira "
+    "gasta, ferro preto curado) pode; sujeira, gordura velha, ferrugem e bagunca NAO, a nao "
+    "ser que a fala seja exatamente sobre isso.",
+    "CENARIO DO PAIS DO ROTEIRO. A cozinha, a casa, a rua e as pessoas tem que ser do pais "
+    "e da regiao de quem narra (uma cozinha de fazenda alema nao tem cara de americana).",
+    "ANCORE NO LITERAL. A imagem mostra a coisa que a frase nomeia, do jeito mais imediato: "
+    "fala 'o balde', mostra o balde em uso; fala 'a frigideira', mostra a frigideira com o "
+    "que esta' sendo feito nela.",
+    "IMAGEM PARADA: escolha o MOMENTO mais expressivo — a mao no meio do gesto, o resultado "
+    "pronto, o ponto exato que a frase descreve. O movimento vem do Ken Burns do montador.",
+    "MAOS FAZENDO A TAREFA sao bem-vindas: em plano medio ou fechado, a mao segurando a "
+    "ferramenta, mexendo a panela, cortando. Pessoa mais velha trabalhando DE LADO ou DE "
+    "COSTAS, nunca olhando pra camera e nunca falando: quem fala de frente e' o avatar.",
     "NAO TROQUE A COISA PELO QUE A GUARDA OU SUSTENTA. O recipiente vazio, a "
     "prateleira, a caixa fechada, a bancada, a maquina desligada nao sao o sujeito: "
     "o sujeito e' o que esta' dentro, em cima ou sendo feito. Medido no 1o video: em "
@@ -125,144 +129,58 @@ REGRAS = [
     "aberto, o lugar com a coisa dentro. O que nao pode e' listar tres objetos "
     "soltos e um fundo cheio — ai' o gerador nao sabe o que e' o principal.",
     "AS IMAGENS SAO DO ASSUNTO DO CANAL, NAO DE QUALQUER PALAVRA DITA. Antes de "
-    "comecar, diga a si mesmo em uma frase do que este canal trata — sai dos roteiros "
-    "de treino e do titulo. So' vira imagem o que PERTENCE a esse assunto. Se o canal "
+    "comecar, diga a si mesmo em uma frase do que este canal trata — sai do roteiro "
+    "e do titulo. So' vira imagem o que PERTENCE a esse assunto. Se o canal "
     "e' de comida, sao os alimentos, os ingredientes, o prato, o preparo. Se e' de "
     "ferramenta, sao as ferramentas e as pecas. Cada canal tem as suas.",
     "OBJETO DE APOIO NAO E' ASSUNTO, mesmo sendo concreto e mesmo tendo sido nomeado. "
     "A narracao cita o tempo todo coisas que so' seguram a frase de pe'. O teste e' um "
     "so': isso e' uma das coisas de que o canal trata, ou so' apareceu porque a frase "
-    "precisava citar? Se for a segunda, e' AVATAR. Isso nao e' lista de proibidos — a "
-    "mesma coisa que aqui e' cenario, noutro canal e' o assunto principal.",
+    "precisava citar? Se for a segunda, e' AVATAR.",
     "SE A NARRACAO PARA NUM OBJETO DE APOIO, O BLOCO E' AVATAR — mesmo que desse pra "
-    "desenhar, mesmo que a frase descreva aquilo em detalhe. E' o caso mais comum de "
-    "imagem ruim: a narracao passa meio minuto no recipiente, na porta, no movel, e o "
-    "video enche de foto de coisa que ninguem veio ver. O narrador falando cobre esse "
-    "trecho melhor do que qualquer imagem. So' volte pra imagem quando a fala voltar "
+    "desenhar, mesmo que a frase descreva aquilo em detalhe. O narrador falando cobre "
+    "esse trecho melhor do que qualquer imagem. So' volte pra imagem quando a fala voltar "
     "pro assunto do canal.",
     "NA DUVIDA, AVATAR. Uma imagem do assunto errado e' pior que o narrador falando: "
-    "ela rouba a atencao e nao entrega nada. E' melhor ter menos imagem e toda ela "
-    "valer alguma coisa.",
+    "ela rouba a atencao e nao entrega nada.",
     "FRASE ABSTRATA E' AVATAR, NAO IMAGEM. Tese, opiniao, 'aqui esta' uma coisa que', "
     "'ninguem faz isso por acaso', a apresentacao do narrador: nesses blocos escolha "
     "tipo avatar. Inventar um objeto generico pra ilustrar ideia e' o que enche o "
     "video de bugiganga aleatoria.",
     "FRASE QUE NOMEIA UM LUGAR E' PLANO ABERTO: o lugar visto de fora e de longe, "
     "com o que estiver em volta. Lugar nao se mostra em macro.",
-    "VIDEO QUANDO O MOVIMENTO E' O ASSUNTO DA FRASE: algo escorrendo, fervendo, "
-    "girando, caindo, sendo montado, gente andando, uma mao completando um gesto. "
-    "Se a frase fala de uma coisa PARADA, e' imagem — e imagem e' o padrao; video "
-    "e' a excecao com motivo.",
-    "LISTA VIRA UMA IMAGEM POR ITEM. Quando a narracao enumera — sem isso, sem aquilo, "
-    "leva tal e tal coisa — cada item ganha o seu bloco com a sua imagem, na ordem em "
-    "que sao ditos. Uma imagem so' pra cobrir a lista inteira desperdica o melhor "
-    "momento que o roteiro te da'.",
+    "LISTA VIRA UMA IMAGEM POR ITEM. Quando a narracao enumera, cada item ganha o seu "
+    "bloco com a sua imagem, na ordem em que sao ditos.",
     "CENA COM GENTE E' CENA, NAO OBJETO. Quando a narracao conta alguem fazendo alguma "
     "coisa — a mae no fogao, o pai na lavoura, a mulher servindo a mesa — mostre A "
-    "PESSOA FAZENDO AQUILO, de costas ou de lado. Nao troque por um close do objeto "
-    "que ela esta' usando: a cena conta a historia, o objeto sozinho nao.",
+    "PESSOA FAZENDO AQUILO, de costas ou de lado. Nao troque por um close do objeto.",
     "TEMPO E LUGAR SE MOSTRAM COM LUGAR. Quando a fala e' sobre uma epoca, uma data, "
-    "um ano, uma cidade ou 'naquele tempo', mostre o lugar: a casa, a rua, o bairro, a "
-    "lavoura, a fachada — de longe, em plano aberto. E' o unico caso em que plano "
-    "aberto e' melhor que close.",
+    "um ano, uma cidade ou 'naquele tempo', mostre o lugar em plano aberto: a casa, a "
+    "rua, a lavoura, a fachada.",
     "NAO DEIXE MONOTONO. Se voce ja' usou o mesmo tipo de plano nos ultimos blocos, "
-    "mude: alterne close de coisa, cena com gente, plano aberto de lugar, macro de "
-    "detalhe. Trinta closes seguidos do mesmo jeito cansam mais que qualquer erro.",
+    "mude: alterne close de coisa, maos trabalhando, plano aberto de lugar, macro de "
+    "detalhe.",
     "VARIE O ANGULO — E ELE E' ESCOLHA SEPARADA DA DISTANCIA. Toda imagem tem as "
     "duas coisas: A QUE DISTANCIA (macro/close/medio/aberto) e DE ONDE A CAMERA OLHA. "
-    "Escreva as duas na primeira parte do prompt.\n"
-    "   Rode entre estes, sem repetir o mesmo angulo em blocos seguidos:\n"
-    "      DE CIMA a prumo, olhando pra baixo\n"
-    "      DE LADO, na mesma altura da coisa\n"
-    "      DE FRENTE, reto\n"
-    "      45 GRAUS de cima\n"
-    "      DE BAIXO, rente a superficie\n"
-    "      POR TRAS, sobre o ombro de quem estiver ali\n"
-    "      TRES QUARTOS, a coisa meio virada\n"
-    "      DA PONTA, olhando ao comprido\n"
-    "   DE CIMA no maximo em 1 de cada 5 imagens. Medido no 1o video: a camera de "
-    "cima dominou porque a lista de sugestoes tinha tres jeitos de dizer 'de cima' "
-    "e nenhum de dizer 'de lado'. Um video inteiro visto de cima parece catalogo.",
-    "CURTO. Ate' umas 15 palavras. Prompt comprido faz o gerador tentar caber tudo "
-    "e nada fica em primeiro plano.",
-    "MAO NO QUADRO E' EXCECAO. So' quando a acao nao existe sem ela. Na duvida, "
-    "mostre so' a coisa. Nunca alguem de frente falando: esse e' o avatar.",
-    "A cena tem que caber na duracao do bloco: um bloco de 4s nao comporta uma acao "
-    "com comeco, meio e fim.",
+    "Rode entre os angulos da lista sem repetir o mesmo em blocos seguidos. DE CIMA no "
+    "maximo em 1 de cada 5 imagens: um video inteiro visto de cima parece catalogo.",
+    "CURTO. Ate' umas 20 palavras, contando a luz. Prompt comprido faz o gerador tentar "
+    "caber tudo e nada fica em primeiro plano.",
     "MACRO E' DE COISA, NUNCA DE SUPERFICIE. De perto a coisa tem que continuar "
-    "RECONHECIVEL: quem olhar precisa saber o que esta' vendo sem ouvir a narracao. "
-    "O teste e' um so': da' pra nomear o sujeito numa palavra? 'sal', 'cerveja', "
-    "'faca' passa. 'o fundo do recipiente', 'a linha marrom por dentro', 'a pelicula "
-    "em cima da tabua', 'o vapor saindo de algum lugar' NAO passa — isso e' "
-    "superficie, e de perto vira textura abstrata que nao diz nada e trava a "
-    "sequencia. Medido nos videos prontos: em 11 dos 27 macros o sujeito era "
-    "superficie, e sao exatamente os que estragam. Se o que voce ia mostrar e' uma "
-    "superficie, suba pra CLOSE e mostre a coisa inteira, ou escolha outro sujeito. "
-    "Isso vale pra qualquer canal: o que muda de nicho pra nicho e' QUAL coisa, nao "
-    "a diferenca entre uma coisa e a casca dela.",
+    "RECONHECIVEL: da' pra nomear o sujeito numa palavra? 'sal', 'cerveja', 'faca' passa. "
+    "'o fundo do recipiente', 'a pelicula em cima da tabua' NAO passa — isso e' "
+    "superficie, e de perto vira textura abstrata. Se for superficie, suba pra CLOSE.",
     "CADA BLOCO E' UMA FRASE INTEIRA — a imagem e' DAQUELA FRASE, nao do paragrafo. "
-    "Os blocos sao cortados nas pausas reais da narracao, entao cada um comeca quando "
-    "um pensamento comeca e acaba quando ele acaba. Leia a frase do bloco e pergunte: "
-    "do que ELA fala? Nao vale ilustrar o assunto geral do trecho, nem repetir a "
-    "imagem do bloco anterior porque 'ainda e' sobre a mesma coisa'. Se a frase mudou "
-    "de coisa, a imagem muda junto; se ela nao fala de nada mostravel, e' AVATAR.",
+    "Leia a frase do bloco e pergunte: do que ELA fala? Se a frase mudou de coisa, a "
+    "imagem muda junto; se ela nao fala de nada mostravel, e' AVATAR.",
 ]
 
 
-# Luz que a IA insiste em escrever na cena. O SUFIXO ja' manda a luz, igual pra todo
-# bloco; escrever de novo aqui da' duas ordens ao gerador e estoura a imagem.
-LUZ = re.compile(
-    r"^\s*(the\s+)?(very\s+|quite\s+)?"
-    r"(soft|bright|warm|cool|natural|dim|even|diffuse|indoor|overhead|gentle|pale|"
-    r"low|flat|muted|golden|harsh|strong)?\s*"
-    r"(day\s?light|sun\s?light|light(ing)?|illumination)\s*$", re.I)
-LUZ_TRECHO = re.compile(
-    r"\b(lit by|illuminated by|light from|daylight from|sunlight from|"
-    r"from a (kitchen )?window|through a window|in soft light|in natural light|"
-    r"in (soft|bright|warm|natural) daylight)\b", re.I)
+def linha_flow(prompt_imagem):
+    """A linha do prompts_flow.txt no formato que o DarkPlanner le' no multiprompt.
 
-
-# adjetivo de luz que sobra pendurado depois de cortar o trecho ("..., warm" )
-# O \b no comeco nao e' decoracao: sem ele a regex comia o FIM de qualquer palavra
-# terminada em um desses adjetivos. "from below" virava "from be" — medido, aconteceu
-# em 4 dos 91 prompts assim que entrou o angulo "from below" na lista.
-ADJ_SOLTO = re.compile(
-    r"[\s,;]*\b(soft|bright|warm|cool|natural|dim|even|diffuse|indoor|overhead|"
-    r"gentle|pale|low|flat|muted|golden|harsh|strong)\s*$", re.I)
-
-
-def limpar_cena(texto):
-    """Tira a luz que a IA escreveu dentro da cena.
-
-    O SUFIXO ja' define a luz, igual pra todo bloco. Quando o diretor escreve
-    "soft daylight" tambem, o gerador recebe duas ordens de luz e a imagem estoura.
-    Medido na 1a leva: 99% dos prompts traziam luz propria. Mesmo com a regra escrita
-    no prompt do diretor, 30% ainda traziam — por isso a limpeza aqui e' mecanica.
+    [I] e' o atalho DELE pra imagem. So' imagem: nao existe mais o [V] de video.
+      [I] <cena>. <sufixo> <enquadramento>
     """
-    saida = []
-    for parte in (texto or "").split(","):
-        parte = parte.strip()
-        if not parte or LUZ.match(parte):
-            continue                      # o trecho inteiro era luz
-        m = LUZ_TRECHO.search(parte)
-        if m:
-            parte = parte[:m.start()].strip().rstrip(",;")
-        anterior = None
-        while parte and parte != anterior:  # "..., warm light from X" -> "..." 
-            anterior, parte = parte, ADJ_SOLTO.sub("", parte).strip()
-        if parte:
-            saida.append(parte)
-    return ", ".join(saida) if saida else (texto or "").strip()
-
-
-def linha_flow(prompt_imagem, prompt_movimento=""):
-    """Monta a linha do prompts_flow.txt no formato que o DarkPlanner lê no multiprompt.
-
-    [I] e [V] sao atalhos DELE. Vao na MESMA linha:
-      so' imagem: [I] <cena>. <sufixo> <enquadramento>
-      com video : [I] <cena>. <sufixo> [V] <movimento>      <- sem o enquadramento
-    """
-    base = limpar_cena(prompt_imagem).rstrip(".")
-    linha = f"[I] {base}. {SUFIXO}"
-    mov = (prompt_movimento or "").strip()
-    return f"{linha} [V] {mov}" if mov else f"{linha} {ENQUADRAMENTO}"
+    base = (prompt_imagem or "").strip().rstrip(".")
+    return f"[I] {base}. {SUFIXO} {ENQUADRAMENTO}"

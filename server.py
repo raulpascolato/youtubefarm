@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import threading
 import time
 import traceback
@@ -16,6 +17,8 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 
 import caminhos
+import claude_code
+import descricao
 import diretor
 import estilo
 import fala
@@ -51,7 +54,8 @@ def erro(msg, code=400):
 # roteiro ANTIGO, e "direcao pronta" apontando pra um plano.json feito em cima de um SRT
 # que nao existe mais. O avatar tambem cai: ele e' a gravacao do roteiro velho.
 DEPOIS_DO_ROTEIRO = dict(audio_estado="nao", audio_msg="", audio_erro="",
-                         audio_path="", srt_path="", avatar_path="")
+                         audio_path="", srt_path="", avatar_path="",
+                         descricao_estado="nao", descricao="", descricao_erro="")
 DEPOIS_DO_AUDIO = dict(direcao_estado="nao", direcao_msg="", direcao_erro="",
                        direcao_resumo={}, pasta_dark="", broll_resumo={})
 DEPOIS_DA_DIRECAO = dict(montagem_estado="nao", montagem_msg="", montagem_erro="",
@@ -66,12 +70,14 @@ def _mascara(k):
 @app.get("/api/config")
 def get_config():
     cfg = store.get_cfg()
-    ka, kd = cfg.get("anthropic_key") or "", cfg.get("darkplanner_key") or ""
-    # nunca devolve as chaves inteiras pro front
-    cfg["anthropic_key"] = _mascara(ka)
+    cfg.pop("anthropic_key", None)        # config antiga: a chave da API nao e' mais usada
+    kd = cfg.get("darkplanner_key") or ""
+    # nunca devolve a chave inteira pro front
     cfg["darkplanner_key"] = _mascara(kd)
-    cfg["tem_key"] = bool(ka)
     cfg["tem_key_dp"] = bool(kd)
+    cfg["modelo"] = claude_code.modelo_cli(cfg.get("modelo"))
+    cfg["modelo_direcao"] = claude_code.modelo_cli(cfg.get("modelo_direcao") or "sonnet")
+    cfg["modelos"] = [{"id": i, "nome": n} for i, n in claude_code.MODELOS]
     cfg["modelo_personagem"] = MODELO_PERSONAGEM
     return cfg
 
@@ -79,16 +85,42 @@ def get_config():
 @app.post("/api/config")
 def set_config(body: dict = Body(...)):
     patch = {}
-    for campo in ("anthropic_key", "darkplanner_key"):
+    for campo in ("darkplanner_key",):
         if campo in body:
             k = (body.get(campo) or "").strip()
             if k and "…" not in k and "•" not in k:   # ignora o placeholder mascarado
                 patch[campo] = k
-    for campo in ("modelo", "chars_por_minuto"):
+    for campo in ("modelo", "modelo_direcao", "chars_por_minuto"):
         if campo in body and body[campo] not in (None, ""):
             patch[campo] = body[campo]
     store.set_cfg(patch)
     return get_config()
+
+
+# ------------------------------------------------------------------ claude code
+# O Claude do app e' o Claude Code logado no PC (ver claude_code.py). O login fica salvo
+# pelo proprio Claude Code, entao o app abre sempre conectado na ultima conta.
+@app.get("/api/claude")
+def claude_status():
+    return claude_code.status()
+
+
+@app.post("/api/claude/entrar")
+def claude_entrar():
+    try:
+        claude_code.entrar()
+    except claude_code.ErroClaude as e:
+        return erro(str(e))
+    return {"ok": True}
+
+
+@app.post("/api/claude/sair")
+def claude_sair():
+    try:
+        claude_code.sair()
+    except claude_code.ErroClaude as e:
+        return erro(str(e))
+    return claude_code.status()
 
 
 # ------------------------------------------------------------------ presets
@@ -102,17 +134,20 @@ def criar_preset(body: dict = Body(...)):
     nome = (body.get("nome") or "").strip()
     conteudo = body.get("conteudo")
     origem = (body.get("origem") or "").strip()
+    tipo = "descricao" if body.get("tipo") == "descricao" else "roteiro"
     if not nome:
         return erro("dá um nome pro modelo (ex: cozinheiro).")
     if not conteudo:
-        return erro("anexa o arquivo de treinamento.")
+        return erro("anexa o arquivo de " + ("descrições." if tipo == "descricao"
+                                             else "treinamento."))
+    minimo = descricao.MIN_CHARS if tipo == "descricao" else roteirista.MIN_CHARS
     try:
         # aceita JSON ou o formato de blocos entre chaves — decide sozinho
-        roteiros = (roteirista.parse_conteudo(conteudo) if isinstance(conteudo, str)
-                    else roteirista.parse_treinamento(conteudo))
+        itens = (roteirista.parse_conteudo(conteudo, minimo) if isinstance(conteudo, str)
+                 else roteirista.parse_treinamento(conteudo, minimo))
     except ValueError as e:
         return erro(str(e))
-    return store.add_preset(nome, roteiros, origem)
+    return store.add_preset(nome, itens, origem, tipo)
 
 
 @app.delete("/api/presets/{pid}")
@@ -146,14 +181,18 @@ def criar_canal(body: dict = Body(...)):
         return erro("dá um nome pro canal.")
     if not idioma:
         return erro("escolhe o idioma do canal.")
-    if not store.preset(preset_id):
+    p = store.preset(preset_id)
+    if not p or p["tipo"] != "roteiro":
         return erro("escolhe um modelo de roteiro.")
     return store.add_canal(nome, idioma, preset_id)
 
 
 @app.delete("/api/canais/{cid}")
 def apagar_canal(cid: str):
+    pastas = [v.get("pasta") for v in store.videos(cid)]
     store.del_canal(cid)
+    for p in pastas:                 # os videos do canal vao junto, com as pastas deles
+        _apagar_pasta(p)
     return {"ok": True}
 
 
@@ -163,6 +202,15 @@ def editar_canal(cid: str, body: dict = Body(...)):
         return erro("o canal precisa de um nome.")
     if "idioma" in body and not (body.get("idioma") or "").strip():
         return erro("o canal precisa de um idioma.")
+    if "preset_id" in body:
+        p = store.preset((body.get("preset_id") or "").strip())
+        if not p or p["tipo"] != "roteiro":
+            return erro("escolhe um modelo de roteiro.")
+    pd = (body.get("preset_desc_id") or "").strip() if "preset_desc_id" in body else None
+    if pd:
+        p = store.preset(pd)
+        if not p or p["tipo"] != "descricao":
+            return erro("esse modelo de descrição não existe mais.")
     c = store.editar_canal(cid, body)
     return c or erro("canal não encontrado.", 404)
 
@@ -391,8 +439,34 @@ def baixar_txt(vid: str):
 
 @app.delete("/api/videos/{vid}")
 def apagar_video(vid: str):
+    v = store.video(vid)
     store.del_video(vid)
+    if v:
+        _apagar_pasta(v.get("pasta"))
     return {"ok": True}
+
+
+def _apagar_pasta(pasta):
+    """Apaga a pasta de trabalho do video — so' se ela estiver DENTRO de data/videos.
+    Uma pasta de fora (projeto antigo, da area de trabalho) nunca e' apagada por aqui."""
+    if not pasta:
+        return
+    try:
+        p, base = Path(pasta).resolve(), dir_saida().resolve()
+        if base in p.parents and p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+            # canal que ficou sem nenhum video: tira a pasta vazia dele tambem
+            if p.parent != base and p.parent.is_dir() and not any(p.parent.iterdir()):
+                p.parent.rmdir()
+    except Exception:
+        traceback.print_exc()
+
+
+@app.post("/api/videos/{vid}/salvo")
+def marcar_salvo(vid: str, body: dict = Body(...)):
+    """O front avisa onde o usuario salvou o video pronto (a copia e' feita pela janela)."""
+    return store.up_video(vid, salvo_em=(body.get("caminho") or "").strip()) or \
+        erro("vídeo não encontrado.", 404)
 
 
 @app.post("/api/videos")
@@ -409,30 +483,22 @@ def criar_video(body: dict = Body(...)):
     if not titulo:
         return erro("escreve o título do vídeo.")
 
-    # roteiro colado: pula a geração inteira. A duração sai do tamanho do texto,
-    # porque aqui quem manda é o roteiro que já existe, não a faixa de 16-20.
-    colado = (body.get("roteiro") or "").strip()
-    if colado:
-        cfg = store.get_cfg()
-        cpm = int(cfg.get("chars_por_minuto") or 810)
-        if len(colado) < 400:
-            return erro("esse roteiro é curto demais — parece que faltou colar o texto.")
-        v = store.add_video(canal_id, titulo, max(1, round(len(colado) / cpm)))
-        return store.up_video(v["id"], estado="pronto", roteiro=colado,
-                              n_chars=len(colado), alvo_chars=len(colado))
-
+    # o roteiro e' sempre escrito pelo Claude Code: nao existe mais "colar roteiro pronto"
     if not (DUR_MIN <= dur <= DUR_MAX):
         return erro(f"a duração tem que ser entre {DUR_MIN} e {DUR_MAX} minutos.")
 
     cfg = store.get_cfg()
-    if not (cfg.get("anthropic_key") or "").strip():
-        return erro("falta a chave da API do Claude. Coloca em Ajustes.")
+    falta = claude_code.pronto()
+    if falta:
+        return erro(falta)
     roteiros = store.roteiros_do_preset(canal["preset_id"])
     if not roteiros:
         return erro("o modelo desse canal está vazio ou foi removido.")
 
     v = store.add_video(canal_id, titulo, dur)
-    alvo = int(dur * int(cfg.get("chars_por_minuto") or 810))
+    # o ritmo medido da voz DESTE canal, se ja' tem video montado; senao, o padrao
+    cpm = int(canal.get("chars_por_minuto") or cfg.get("chars_por_minuto") or 1060)
+    alvo = int(dur * cpm)
     store.up_video(v["id"], alvo_chars=alvo, estado="gerando")
     threading.Thread(target=_gerar, args=(v["id"], canal, titulo, dur, alvo, roteiros, cfg),
                      daemon=True).start()
@@ -463,7 +529,9 @@ def criar_audio(vid: str):
     if not (cfg.get("darkplanner_key") or "").strip():
         return erro("falta a chave do DarkPlanner. Coloca em Ajustes.")
 
-    pasta = dir_saida() / _slug(canal["nome"], 40) / _slug(v["titulo"])
+    # o id no nome: dois videos com o mesmo titulo nao dividem a mesma pasta (e apagar um
+    # nao apaga o outro)
+    pasta = dir_saida() / _slug(canal["nome"], 40) / f'{_slug(v["titulo"], 50)}-{v["id"]}'
     store.up_video(vid, audio_estado="gerando", audio_msg="preparando…",
                    audio_erro="", pasta=str(pasta),
                    **DEPOIS_DO_AUDIO, **DEPOIS_DA_DIRECAO)
@@ -558,8 +626,9 @@ def criar_direcao(vid: str):
     if v["direcao_estado"] == "gerando":
         return erro("já tem uma direção rodando pra esse vídeo.")
     cfg = store.get_cfg()
-    if not (cfg.get("anthropic_key") or "").strip():
-        return erro("falta a chave do Claude. Coloca em Ajustes.")
+    falta = claude_code.pronto()
+    if falta:
+        return erro(falta)
     canal = store.canal(v["canal_id"])
     store.up_video(vid, direcao_estado="gerando", direcao_msg="lendo o SRT…",
                    direcao_erro="", **DEPOIS_DA_DIRECAO)
@@ -584,8 +653,7 @@ def _gerar_direcao(vid, v, canal, cfg):
         except Exception:
             traceback.print_exc()
         plano = diretor.dirigir(
-            api_key=cfg["anthropic_key"],
-            modelo=cfg.get("modelo") or "claude-opus-5",
+            modelo=claude_code.modelo_cli(cfg.get("modelo_direcao") or "sonnet"),
             blocos=blocos,
             tema=v["titulo"],
             canal=canal,
@@ -615,7 +683,7 @@ def anexar_avatar(vid: str, body: dict = Body(...)):
 
 @app.post("/api/videos/{vid}/broll")
 def importar_broll(vid: str, body: dict = Body(...)):
-    """Traz o que o DarkPlanner baixou pra dentro da pasta do vídeo."""
+    """Traz as imagens que o DarkPlanner baixou pra dentro da pasta do vídeo."""
     v = store.video(vid)
     if not v:
         return erro("vídeo não encontrado.", 404)
@@ -624,16 +692,15 @@ def importar_broll(vid: str, body: dict = Body(...)):
     pasta = Path((body.get("pasta") or "").strip())
     if not pasta.is_dir():
         return erro("essa pasta não existe.")
-    if not (pasta / "images").is_dir() and not (pasta / "videos").is_dir():
-        return erro("não achei 'images' nem 'videos' aí dentro. "
+    if not (pasta / "images").is_dir():
+        return erro("não achei a pasta 'images' aí dentro. "
                     "Aponta a pasta onde o DarkPlanner baixa.")
     try:
         conta = montador.importar_broll(pasta, Path(v["pasta"]) / "broll",
                                         Path(v["pasta"]) / "clipes")
     except montador.ErroMontagem as e:
         return erro(str(e))
-    resumo = {"imagem": conta["imagem"], "video": conta["video"],
-              "faltando": len(conta["faltando"])}
+    resumo = {"imagem": conta["imagem"], "faltando": len(conta["faltando"])}
     return store.up_video(vid, pasta_dark=str(pasta), broll_resumo=resumo)
 
 
@@ -679,6 +746,91 @@ def _montar(vid, v, canal):
     except Exception as e:
         traceback.print_exc()
         store.up_video(vid, montagem_estado="erro", montagem_msg="", montagem_erro=str(e))
+        return
+    _medir_ritmo(v)
+    # video pronto: a descricao ja' sai sozinha, se o canal tem modelo de descricao e ela
+    # ainda nao foi feita
+    atual = store.video(vid) or {}
+    if (canal or {}).get("preset_desc_id") and atual.get("descricao_estado") != "pronto":
+        _iniciar_descricao(vid)
+
+
+def _duracao_s(arquivo):
+    r = subprocess.run([caminhos.ffmpeg(), "-hide_banner", "-i", str(arquivo)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    m = re.search(r"Duration:\s*(\d+):(\d+):([\d.]+)", r.stderr or "")
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
+
+
+def _medir_ritmo(v):
+    """Quantos caracteres do roteiro viraram 1 minuto de video, medido no audio FINAL
+    (o que a montagem usou, ja' com as pausas aparadas). Fica no canal e vale pros
+    proximos roteiros dele: cada voz e cada idioma tem o seu ritmo, e um numero so' pro
+    app inteiro fazia o pedido de 20 min virar 15."""
+    try:
+        seg = _duracao_s(v["audio_path"])
+        n = len(v.get("roteiro") or "")
+        if seg < 60 or n < 1000:
+            return
+        medido = n / (seg / 60)
+        if not 400 <= medido <= 2500:          # leitura absurda: nao aprende nada
+            return
+        canal = store.canal(v["canal_id"]) or {}
+        antes = canal.get("chars_por_minuto")
+        # media com o que ja' tinha: um video com muita pausa nao vira a regra sozinho
+        novo = round((antes + medido) / 2) if antes else round(medido)
+        store.editar_canal(v["canal_id"], {"chars_por_minuto": novo})
+    except Exception:
+        traceback.print_exc()
+
+
+# ------------------------------------------------------------------ descricao
+def _iniciar_descricao(vid):
+    """'' se comecou; senao, o motivo."""
+    v = store.video(vid)
+    if not v:
+        return "vídeo não encontrado."
+    if v["estado"] != "pronto" or not v.get("roteiro"):
+        return "a descrição precisa do roteiro pronto."
+    if v.get("descricao_estado") == "gerando":
+        return "a descrição já está sendo escrita."
+    canal = store.canal(v["canal_id"])
+    if not canal or not canal.get("preset_desc_id"):
+        return "escolha um modelo de descrição no canal (Editar canal)."
+    modelos = store.roteiros_do_preset(canal["preset_desc_id"])
+    if not modelos:
+        return "o modelo de descrição desse canal está vazio ou foi apagado."
+    falta = claude_code.pronto()
+    if falta:
+        return falta
+    store.up_video(vid, descricao_estado="gerando", descricao_erro="")
+    threading.Thread(target=_gerar_descricao, args=(vid, v, canal, modelos),
+                     daemon=True).start()
+    return ""
+
+
+def _gerar_descricao(vid, v, canal, modelos):
+    try:
+        texto = descricao.gerar(
+            modelo=claude_code.modelo_cli(store.get_cfg().get("modelo")),
+            canal=canal, titulo=v["titulo"], roteiro=v["roteiro"], modelos=modelos,
+            srt_path=v.get("srt_path") or "")
+        store.up_video(vid, descricao=texto, descricao_estado="pronto", descricao_erro="")
+        # tambem fica na pasta do video, ao lado do mp4
+        if v.get("pasta") and Path(v["pasta"]).is_dir():
+            (Path(v["pasta"]) / "descricao.txt").write_text(texto, encoding="utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        store.up_video(vid, descricao_estado="erro", descricao_erro=str(e))
+
+
+@app.post("/api/videos/{vid}/descricao")
+def criar_descricao(vid: str):
+    motivo = _iniciar_descricao(vid)
+    if motivo:
+        return erro(motivo)
+    return store.video(vid)
 
 
 @app.get("/api/videos/{vid}/prompts")
@@ -706,8 +858,9 @@ def refazer_roteiro(vid: str):
     if not canal:
         return erro("canal não encontrado.", 404)
     cfg = store.get_cfg()
-    if not (cfg.get("anthropic_key") or "").strip():
-        return erro("falta a chave do Claude. Coloca em Ajustes.")
+    falta = claude_code.pronto()
+    if falta:
+        return erro(falta)
     roteiros = store.roteiros_do_preset(canal["preset_id"])
     if not roteiros:
         return erro("o modelo desse canal está vazio ou foi removido.")
@@ -743,10 +896,9 @@ def _gerar(vid, canal, titulo, dur, alvo, roteiros, cfg):
     def on_delta(parcial):
         store.up_video(vid, roteiro=parcial, n_chars=len(parcial))
 
-    modelo = cfg.get("modelo") or "claude-opus-5"
+    modelo = claude_code.modelo_cli(cfg.get("modelo"))
     try:
         texto = roteirista.gerar_roteiro(
-            api_key=cfg["anthropic_key"],
             modelo=modelo,
             titulo=titulo,
             dur_min=dur,
@@ -757,7 +909,7 @@ def _gerar(vid, canal, titulo, dur, alvo, roteiros, cfg):
             canal=canal,
         )
         # rede de seguranca: canal sem produto que mesmo assim saiu vendendo algo
-        aviso = roteirista.checar_produto(cfg["anthropic_key"], modelo, texto, canal)
+        aviso = roteirista.checar_produto(modelo, texto, canal)
         store.up_video(vid, roteiro=texto, n_chars=len(texto), estado="pronto",
                        erro="", aviso=aviso)
     except Exception as e:

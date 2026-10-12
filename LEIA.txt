@@ -24,14 +24,17 @@ na primeira vez abre uma janela preta instalando coisa, leva 1 ou 2 minutos
 nao fecha essa janela. depois disso ele abre direto
 
 
-4. as chaves
+4. o claude e a chave do darkplanner
 
-abre o app, vai em ajustes e cola as duas:
+o roteiro e a direcao usam o Claude Code instalado no PC (nao precisa de chave de API).
+instala o Claude Code (docs.anthropic.com/claude-code), abre o app, vai em ajustes e clica em
+"Entrar" na parte do Claude. abre uma janela, ela abre o navegador, voce entra na sua
+conta do Claude (Pro ou Max) e pronto: fica conectado nas proximas vezes.
+o roteiro e a direcao gastam o limite do plano dessa conta.
 
-  claude       console.anthropic.com  (settings > api keys)
-  darkplanner  app.darkplanner.com.br
+a chave do darkplanner (app.darkplanner.com.br) voce cola tambem em ajustes.
 
-sem a do claude ele nao escreve roteiro
+sem o claude conectado ele nao escreve roteiro
 sem a do darkplanner ele nao gera a voz
 
 

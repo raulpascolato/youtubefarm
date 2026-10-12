@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Roteirista: le o .json de treinamento do modelo e escreve o roteiro novo com o Claude.
+"""Roteirista: le o .json de treinamento do modelo e escreve o roteiro novo com o Claude
+(o Claude Code logado no PC — ver claude_code.py; nao usa mais a API).
 
 O .json de treinamento e' permissivo de proposito — voce cola o que tiver. Aceita:
   ["roteiro um...", "roteiro dois..."]
@@ -7,12 +8,10 @@ O .json de treinamento e' permissivo de proposito — voce cola o que tiver. Ace
   {"roteiros": [...]}  {"scripts": [...]}  {"data": [...]}  {"items": [...]}
   {"video1": {...}, "video2": {...}}
 """
-# O anthropic sozinho leva 4,0s pra importar — 73% da abertura do app, medido.
-# Como ele so' serve pra chamar a API, o import mora dentro das funcoes: a janela
-# abre na hora e a espera vai pro primeiro uso, onde 4s nao fazem falta perto dos
-# minutos que a geracao leva.
 import json
 import re
+
+import claude_code
 
 
 # chaves aceitas pro texto do roteiro, em ordem de preferencia
@@ -51,7 +50,7 @@ def _texto_de(obj):
     return "", ""
 
 
-def parse_blocos(texto):
+def parse_blocos(texto, minimo=MIN_CHARS):
     """Formato de TEXTO (nao e' JSON): cada roteiro fica entre chaves sozinhas na linha.
 
         {
@@ -80,7 +79,7 @@ def parse_blocos(texto):
             if corpo.startswith("#"):
                 cabeca, _, resto = corpo.partition("\n")
                 titulo, corpo = cabeca.lstrip("#").strip(), resto.strip()
-            if len(corpo) >= MIN_CHARS:
+            if len(corpo) >= minimo:
                 roteiros.append({"titulo": titulo, "texto": corpo})
             dentro = False
             continue
@@ -91,25 +90,26 @@ def parse_blocos(texto):
     return roteiros
 
 
-def parse_conteudo(texto):
-    """Descobre sozinho o formato do arquivo: JSON ou blocos entre chaves."""
+def parse_conteudo(texto, minimo=MIN_CHARS):
+    """Descobre sozinho o formato do arquivo: JSON ou blocos entre chaves.
+    `minimo` e' o tamanho minimo de cada item (descricao de video e' mais curta)."""
     texto = (texto or "").strip()
     if not texto:
         raise ValueError("o arquivo está vazio.")
     try:
-        return parse_treinamento(json.loads(texto))
+        return parse_treinamento(json.loads(texto), minimo)
     except json.JSONDecodeError:
         pass          # nao e' JSON — tenta o formato de blocos
-    roteiros = parse_blocos(texto)
+    roteiros = parse_blocos(texto, minimo)
     if not roteiros:
         raise ValueError(
-            "não entendi o arquivo. Use JSON, ou ponha cada roteiro entre chaves "
-            "sozinhas na linha:\n{\nroteiro um\n}\n{\nroteiro dois\n}\n"
-            f"(cada roteiro precisa de pelo menos {MIN_CHARS} caracteres)")
+            "não entendi o arquivo. Use JSON, ou ponha cada texto entre chaves "
+            "sozinhas na linha:\n{\ntexto um\n}\n{\ntexto dois\n}\n"
+            f"(cada um precisa de pelo menos {minimo} caracteres)")
     return roteiros
 
 
-def parse_treinamento(dados):
+def parse_treinamento(dados, minimo=MIN_CHARS):
     """json cru -> [{titulo, texto}]. Levanta ValueError com motivo legivel."""
     bruto = dados
     if isinstance(bruto, dict):
@@ -129,12 +129,12 @@ def parse_treinamento(dados):
     for item in bruto:
         titulo, texto = _texto_de(item)
         texto = (texto or "").strip()
-        if len(texto) >= MIN_CHARS:
+        if len(texto) >= minimo:
             roteiros.append({"titulo": titulo, "texto": texto})
 
     if not roteiros:
-        raise ValueError(f"nenhum roteiro encontrado (precisa de pelo menos {MIN_CHARS} "
-                         "caracteres de texto por item).")
+        raise ValueError(f"nenhum texto encontrado (precisa de pelo menos {minimo} "
+                         "caracteres por item).")
     return roteiros
 
 
@@ -184,6 +184,68 @@ REGRAS:
    sem a história em volta — nunca um item pela metade nem um item cortado fora.
 5. Mantenha o mesmo grau de concretude dos roteiros de treino: se eles usam números, nomes, datas e detalhes específicos, o seu também usa.
 
+═══ RETENÇÃO — REGRAS MEDIDAS NOS VÍDEOS DO PRÓPRIO CANAL ═══
+
+Estas regras vêm da curva de retenção de vídeos reais deste canal e valem ACIMA do molde:
+onde o molde e estas regras discordarem, siga estas regras. Elas falam de FORMA, nunca
+de assunto.
+
+1. O CONTEÚDO COMEÇA CEDO. A primeira informação útil (a parte 1, o item nº 1) começa
+   até 12% do roteiro. Medido: nos vídeos em que ela só chegava aos 23–26% (3:35–4:00
+   de vídeo), o público foi embora esperando. Tudo o que vem antes cabe nesses 12%:
+   gancho até 5%; o objeto/cenário até 3%; apresentação do narrador em no máximo duas
+   frases; o anúncio das partes em duas frases; o pedido de inscrição em uma.
+   Não existe bloco de família/parente separado antes do conteúdo. Se a história de um
+   parente serve ao vídeo, ela entra em uma ou duas frases dentro do gancho, ou mais
+   tarde, no meio, como recompensa (ver regra 5).
+
+2. A RESPOSTA SÓ NA SEÇÃO DELA. O truque, o segredo, a peça guardada pro fim — o que o
+   título e o gancho prometem — não pode ser dito nem insinuado de um jeito que dê pra
+   adivinhar antes da seção final. No gancho, no objeto e na apresentação você pode
+   dizer o RESULTADO ("nunca caiu uma crosta") e o ERRO de todo mundo; nunca o que a
+   pessoa fazia de certo ("ela nunca apertava", "ela levava ao forno"). Se o título já
+   entrega parte da resposta, o gancho abre uma pergunta NOVA que o título não responde
+   e segura essa resposta até o fim. Medido: o vídeo que disse a resposta no primeiro
+   minuto perdeu mais da metade de quem ainda assistia entre 3:00 e 3:40.
+
+3. O GANCHO TEM UM FATO E UMA CONTRADIÇÃO NAS DUAS PRIMEIRAS FRASES. Uma coisa concreta e
+   verificável (uma pessoa com nome ou ofício, um lugar, um número, um objeto) e uma
+   afirmação que contraria o que o espectador acha. Descrição do erro, no máximo três
+   frases antes da virada. Medido: abrir com nove frases descrevendo o fracasso deu 49%
+   de público aos 30 segundos; abrir com uma pessoa, um lugar, um número e uma frase que
+   contraria o senso comum deu 70%.
+   Ainda no gancho, prometa duas ou três recompensas ESPECÍFICAS do meio e do fim pelo
+   número ou pela posição, como os roteiros de treino fazem ("a parte 4 é a que quase
+   todo mundo erra", "a 6 vai parecer piada até eu explicar"). Promessa genérica ("no
+   fim eu conto o segredo") não segura ninguém.
+
+4. O PRODUTO VEM DEPOIS DO PRIMEIRO VALOR. O anúncio (ou, sem produto, o bloco de
+   inscrição/comentário) entra logo DEPOIS da parte 1, nunca entre o gancho e o
+   primeiro conteúdo, e cabe em cerca de 400 caracteres com piada e tudo.
+
+5. UM RE-GANCHO A CADA ~2.000 CARACTERES (mais ou menos a cada duas partes, ~2 minutos).
+   Uma frase de progresso + uma promessa concreta do que vem ("três partes feitas; a
+   próxima é a que estraga a maioria sem ninguém perceber"), ou a volta ao objeto/pessoa
+   da abertura com um detalhe NOVO que só agora faz sentido. Nunca passe de ~2.500
+   caracteres sem uma frase que puxe o espectador pra frente. Medido: os vídeos do canal
+   tinham zero re-ganchos no meio e a curva só descia.
+
+6. CADA PARTE ABRE PELO QUE SE VÊ. Primeira frase: o erro visível ou o resultado. Depois
+   o que fazer. Depois o porquê, em no máximo três ou quatro frases — de preferência uma
+   comparação do dia a dia em vez de um parágrafo de física. Nenhuma parte passa de
+   ~1.500 caracteres, e alterne partes curtas e longas.
+
+7. O FIM É CURTO. A seção do truque começa entre 70% e 78% do roteiro e, depois que ele é
+   entregue, sobram no máximo 15%: a parte honesta em até três pontos curtos, a
+   recapitulação em até seis frases curtas (ou nenhuma), a "uma coisa só" em uma ou duas
+   frases, o objeto final e a pergunta pros comentários. Medido: com 28–36% do vídeo
+   sobrando depois do truque, o público saía assim que ele era entregue.
+
+8. TERMINE COM UMA PONTE PRO PRÓXIMO VÍDEO, como os roteiros de treino em lista fazem:
+   o assunto do próximo e uma coisa concreta e misteriosa que vai aparecer nele ("e tem
+   uma coisa que estava em toda casa e que ninguém come mais no café — quando eu disser
+   o que é, você vai achar que é brincadeira"). Uma promessa, não um "se inscreva".
+
 {personagem}
 {produto}
 --- ROTEIROS DE TREINAMENTO DO CANAL ---
@@ -201,7 +263,7 @@ COM_PRODUTO = """═══ O PRODUTO DESTE CANAL ═══
 O ÚNICO produto que existe neste canal é:
   Nome: {nome}
   Site: {site}
-{desc}
+
 ⚠ ATENÇÃO AO NOME. Os roteiros de treinamento vendem o produto de OUTRA pessoa, com
 outro nome e outro site. Aquilo é exemplo de FORMATO, não de conteúdo. É proibido
 escrever o nome ou o endereço que aparecem nos roteiros de treino. O único nome que
@@ -217,6 +279,8 @@ vida que o roteiro conta. O anúncio sai DALI e não parece colado.
 Se o gancho estiver alguns pontos fora da janela de 10% a 20%, vá até ele. A janela
 é o alvo; o gancho é melhor que o alvo. Só não passe da metade do vídeo.
 Se não houver gancho nenhum, aí sim escreva o anúncio do zero, dentro da janela.
+Em qualquer caso, o anúncio vem DEPOIS da primeira parte de conteúdo, nunca antes dela:
+quem ainda não recebeu nada não fica pra ouvir uma oferta.
 
 O anúncio não é um intervalo comercial. É uma história curta que explica POR QUE o
 produto existe, e essa explicação é o que prova a autoridade do narrador. Observe como
@@ -226,10 +290,13 @@ os roteiros de treino fazem e reproduza o mecanismo:
    cansou de repetir a mesma resposta. Nunca "eu criei um produto incrível".
 2. Uma piada com ele mesmo ou uma farpa carinhosa em alguém. Tira o cheiro de venda.
 3. O nome do produto, dito com naturalidade, e onde achar: "{site}".
-   Nesse exato momento aparece na tela um cartão com a capa, o endereço e um QR CODE.
-   Mande a pessoa usar: uma frase curta, do jeito que ELE falaria, dizendo pra apontar
-   a câmera do celular pro código que está na tela, ou pegar o link na descrição.
-   Uma frase só, sem insistir, sem repetir o endereço depois.
+   Durante o anúncio inteiro aparece na tela um cartão com a capa, o endereço e um
+   QR CODE, e ele fica uns dez segundos — o tempo de alguém pegar o telefone e
+   enquadrar o código. Então escreva o anúncio PARA esses dez segundos: diga o nome,
+   diga o endereço, e só então mande apontar a câmera do celular pro código que está
+   na tela, ou pegar o link na descrição.
+   Não amontoe as três coisas numa frase só nem jogue o "aponta o celular" como
+   remendo no fim. Sem insistir, e sem repetir o endereço depois.
 4. Saída rápida. Uma frase curta e volta pro assunto ("Enfim, voltando").
 
 NÃO liste características, não prometa resultado, não fale em preço, não use palavra de
@@ -295,9 +362,7 @@ def bloco_produto(canal):
     site = (canal or {}).get("produto_site", "").strip()
     if not (nome and site):
         return SEM_PRODUTO
-    desc = (canal or {}).get("produto_desc", "").strip()
-    return COM_PRODUTO.format(nome=nome, site=site,
-                              desc=f"Do que se trata: {desc}\n" if desc else "")
+    return COM_PRODUTO.format(nome=nome, site=site)
 
 
 CHECAGEM = """Leia o roteiro abaixo e extraia UM fato: o narrador anuncia um produto
@@ -339,7 +404,7 @@ def _combina(a, b):
     return bool(a and b and (a in b or b in a))
 
 
-def checar_produto(api_key, modelo, roteiro, canal):
+def checar_produto(modelo, roteiro, canal):
     """Depois de gerar: o roteiro anunciou o que devia? Devolve o aviso (ou '').
 
     Cobre os dois lados:
@@ -353,15 +418,8 @@ def checar_produto(api_key, modelo, roteiro, canal):
     nome = (canal or {}).get("produto_nome", "").strip()
     site = (canal or {}).get("produto_site", "").strip()
     try:
-        import anthropic
-        cliente = anthropic.Anthropic(api_key=api_key)
-        r = cliente.messages.create(
-            model=modelo,
-            max_tokens=2000,
-            output_config={"format": {"type": "json_schema", "schema": CHECAGEM_SCHEMA}},
-            messages=[{"role": "user", "content": CHECAGEM.format(roteiro=roteiro[:60000])}],
-        )
-        d = json.loads("".join(c.text for c in r.content if c.type == "text"))
+        d = claude_code.escrever("", CHECAGEM.format(roteiro=roteiro[:60000]),
+                                 modelo=modelo, schema=CHECAGEM_SCHEMA)
     except Exception:
         return ""      # a checagem e' um extra: se falhar, nao atrapalha a geracao
 
@@ -392,14 +450,23 @@ Estes são os dados do narrador. Ele é o MESMO em todos os vídeos do canal:
 
 {ficha}
 
-Isso é intocável: sai exatamente como está aí, sem trocar e sem acrescentar. O RESTO
-— profissão, origem, família, jeito de falar — você constrói livre, seguindo o molde
-dos roteiros de treino.
+Isso é intocável: sai exatamente como está aí, sem trocar e sem acrescentar. Se a ficha
+traz família e história, é ESSA a família e ESSA a história — é a mesma que está no
+produto do canal, e quem compra vai ler. O que a ficha não diz — jeito de falar,
+detalhes do dia a dia — você constrói livre, seguindo o molde dos roteiros de treino,
+sem nunca contradizer a ficha.
+
+A FICHA É CONSULTA, NÃO TEXTO PRA RECITAR. Use um detalhe dela só onde os roteiros de
+treino usariam um detalhe parecido: na apresentação, numa lembrança da família, numa
+história que o assunto do vídeo pede. Num vídeo entram poucos detalhes — os que servem
+àquele assunto —, nunca a ficha inteira. Mas quando um detalhe de família ou de história
+aparecer, ele tem que ser o da ficha.
 
 ⚠ Uma proibição só: não pegue emprestada a vida do narrador dos roteiros de treino.
 O nome, a cidade, a esposa, o pai e a mãe que aparecem lá são de OUTRA pessoa. Se você
-precisar de um detalhe desses, invente um coerente com a ficha acima — nunca copie o
-dele nem faça a versão traduzida do dele.
+precisar de um detalhe que a ficha não dá, invente um coerente com ela — nunca copie o
+dele nem faça a versão traduzida do dele. A ÚNICA exceção é o que está escrito na ficha:
+o que a ficha diz vale, mesmo que se pareça com a vida do narrador de treino.
 
 Monte o bloco de identidade no ponto do roteiro em que os roteiros de treino fazem a
 apresentação, e escreva do mesmo jeito que eles escrevem.
@@ -410,7 +477,11 @@ def bloco_personagem(canal):
     ficha = (canal or {}).get("personagem", "").strip()
     # linhas do modelo que ficaram sem resposta ("Idade:") viram ruido no prompt
     linhas = [l for l in ficha.splitlines()
-              if l.strip().rstrip(":") and not l.strip().endswith(":")]
+              if l.strip().rstrip(":") and not l.strip().endswith(":")
+              and "(um fato por linha)" not in l]
+    # cabecalho de familia sem nenhum fato embaixo e' o modelo colado sem preencher
+    if linhas and linhas[-1].strip().startswith("Família e história"):
+        linhas.pop()
     ficha = chr(10).join(linhas)
     return PERSONAGEM.format(ficha=ficha) if ficha else ""
 
@@ -447,33 +518,18 @@ Devolva SÓ o roteiro final. Sem comentários, sem contagem, sem explicação.
 {texto}"""
 
 
-def _escrever(cliente, modelo, prompt, on_delta=None, max_tokens=32000):
-    buf = []
-    with cliente.messages.stream(model=modelo, max_tokens=max_tokens,
-                                 thinking={"type": "adaptive"},
-                                 messages=[{"role": "user", "content": prompt}]) as fluxo:
-        for ev in fluxo:
-            if ev.type == "content_block_delta" and ev.delta.type == "text_delta":
-                buf.append(ev.delta.text)
-                if on_delta:
-                    on_delta("".join(buf))
-        fluxo.get_final_message()
-    return "".join(buf).strip()
-
-
-def enxugar(api_key, modelo, texto, maximo, idioma, on_delta=None, tentativas=2):
+def enxugar(modelo, texto, maximo, idioma, on_delta=None, tentativas=2):
     """Pedir educadamente não bastou: o modelo estoura o limite com frequência.
     Aqui a gente MEDE e manda cortar, dizendo quantos caracteres precisam sair.
     Cada passada custa uma geração a mais — só roda quando realmente passou."""
-    cliente = anthropic.Anthropic(api_key=api_key)
     for _ in range(tentativas):
         if len(texto) <= maximo:
             break
         sobra = len(texto) - maximo
-        novo = _escrever(cliente, modelo, ENXUGAR.format(
+        novo = claude_code.escrever("", ENXUGAR.format(
             atual=len(texto), maximo=maximo, sobra=sobra,
             pct=round(100 * sobra / len(texto)), idioma=idioma, texto=texto),
-            on_delta=on_delta)
+            modelo=modelo, on_delta=on_delta)
         # se a "correção" veio maior ou absurdamente curta, descarta e fica com o que tinha
         if not novo or len(novo) >= len(texto) or len(novo) < maximo * 0.5:
             break
@@ -481,7 +537,7 @@ def enxugar(api_key, modelo, texto, maximo, idioma, on_delta=None, tentativas=2)
     return texto
 
 
-def gerar_roteiro(api_key, modelo, titulo, dur_min, idioma, roteiros, alvo_chars,
+def gerar_roteiro(modelo, titulo, dur_min, idioma, roteiros, alvo_chars,
                   on_delta=None, canal=None):
     """Gera o roteiro em streaming. on_delta(texto_parcial_acumulado) e' chamado a cada
     pedaco. Devolve o texto final."""
@@ -502,33 +558,8 @@ def gerar_roteiro(api_key, modelo, titulo, dur_min, idioma, roteiros, alvo_chars
                            personagem=bloco_personagem(canal))
     user = USER.format(titulo=titulo, dur=dur_min, alvo=alvo_chars, idioma=idioma)
 
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
-    buf = []
-    # streaming: max_tokens alto nao estoura timeout, e o front mostra o texto nascendo.
-    # cache_control no system: o bloco de treino e' identico entre videos do mesmo canal,
-    # entao do 2o video em diante o treino sai ~90% mais barato.
-    with client.messages.stream(
-        model=modelo,
-        max_tokens=64000,
-        thinking={"type": "adaptive"},
-        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": user}],
-    ) as stream:
-        for event in stream:
-            if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                buf.append(event.delta.text)
-                if on_delta:
-                    on_delta("".join(buf))
-        final = stream.get_final_message()
-
-    if final.stop_reason == "refusal":
-        motivo = getattr(getattr(final, "stop_details", None), "explanation", "") or ""
-        raise RuntimeError("o modelo recusou esse pedido. " + motivo)
-
-    texto = "".join(buf).strip()
-    if not texto:
-        raise RuntimeError("o modelo não devolveu texto (stop_reason=%s)." % final.stop_reason)
+    # o Claude Code manda o texto em pedacos: o front mostra o roteiro nascendo
+    texto = claude_code.escrever(system, user, modelo=modelo, on_delta=on_delta)
 
     # o limite no prompt é só um pedido, e o modelo estoura direto. Aqui a gente confere
     # e, se passou, manda cortar de verdade.
@@ -536,5 +567,5 @@ def gerar_roteiro(api_key, modelo, titulo, dur_min, idioma, roteiros, alvo_chars
     if len(texto) > maximo:
         if on_delta:
             on_delta(texto)
-        texto = enxugar(api_key, modelo, texto, maximo, idioma, on_delta=on_delta)
+        texto = enxugar(modelo, texto, maximo, idioma, on_delta=on_delta)
     return texto

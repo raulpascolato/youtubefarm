@@ -156,11 +156,13 @@ def _kenburns(dur, variacao, render=None, pulo=0):
                f"crop={L}:{A},{persp},format=yuv420p,setsar=1")
 
 def importar_broll(pasta_dark, pasta_broll, destino):
-    """Traz o que o DarkPlanner baixou pra dentro da pasta do video.
+    """Traz as imagens que o DarkPlanner baixou pra dentro da pasta do video.
 
     O nome do arquivo comeca com o numero do prompt (5_algum_texto.jpg, ou 5.jpg quando vem
     do Flow Multi Prompt). O flow_map.csv
     diz qual bloco e' aquele prompt. Entao 5 -> bloco 8 -> bloco_008.jpg.
+    So' imagem: o b-roll nao tem mais video. Projeto antigo cuja direcao pediu video
+    tambem funciona, porque todo prompt [I] sempre gerou a imagem dele.
     """
     pasta_dark, destino = Path(pasta_dark), Path(destino)
     mapa = Path(pasta_broll) / "flow_map.csv"
@@ -181,27 +183,23 @@ def importar_broll(pasta_dark, pasta_broll, destino):
         return achados
 
     imagens = indexar("images", {".jpg", ".jpeg", ".png", ".webp"})
-    videos = indexar("videos", {".mp4", ".mov", ".webm"})
 
-    conta = {"imagem": 0, "video": 0, "faltando": []}
+    conta = {"imagem": 0, "faltando": []}
     with open(mapa, encoding="utf-8-sig", newline="") as fmapa:
         linhas = list(csv.DictReader(fmapa))
     for linha in linhas:
-        ordem, bloco, tipo = int(linha["ordem"]), int(linha["bloco"]), linha["tipo"]
-        origem = videos.get(ordem) if tipo == "video" else imagens.get(ordem)
-        if origem is None:                      # o video nao veio? usa a imagem dele
-            origem = imagens.get(ordem)
-            tipo = "imagem" if origem else tipo
+        ordem, bloco = int(linha["ordem"]), int(linha["bloco"])
+        origem = imagens.get(ordem)
         if origem is None:
             conta["faltando"].append(bloco)
             continue
         shutil.copy2(origem, destino / f"bloco_{bloco:03d}{origem.suffix.lower()}")
-        conta["imagem" if tipo == "imagem" else "video"] += 1
+        conta["imagem"] += 1
     return conta
 
 
 def _achar(clipes, n):
-    for ext in (".mp4", ".mov", ".webm", ".jpg", ".jpeg", ".png", ".webp"):
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
         p = Path(clipes) / f"bloco_{n:03d}{ext}"
         if p.exists():
             return p
@@ -223,7 +221,7 @@ def quadros(dur):
 DISSOLVE = 0.4      # b-roll emendando em b-roll: um derrete no outro
 
 
-def cauda(fonte, dur_ant, variacao_ant, saida, parado=False):
+def cauda(fonte, dur_ant, variacao_ant, saida):
     """Os DISSOLVE segundos que viriam DEPOIS do bloco que sai, com a imagem dele.
 
     E' o que a dissolvencia sobrepoe. Imagem e movimento sao os DO BLOCO QUE SAI: ele
@@ -241,12 +239,7 @@ def cauda(fonte, dur_ant, variacao_ant, saida, parado=False):
     # o percurso continua sendo o do bloco que sai; o pulo comeca a contar depois do
     # ultimo quadro dele. Como a taxa e' por segundo, esticar 0,4s nao acelera nada.
     corte = min(DISSOLVE, dur_ant)
-    if parado:
-        # o bloco que sai e' um clipe de video: nao tem ken burns pra continuar, entao
-        # a cauda e' o ultimo quadro dele parado, sumindo.
-        q, vf = quadros(corte), FIT
-    else:
-        q, vf = _kenburns(dur_ant, variacao_ant, render=corte, pulo=quadros(dur_ant))
+    q, vf = _kenburns(dur_ant, variacao_ant, render=corte, pulo=quadros(dur_ant))
     _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{corte + 0.2:.3f}",
           "-i", str(fonte), "-vf", vf, "-frames:v", str(q), *X264, str(saida)])
 
@@ -260,19 +253,6 @@ def cauda_avatar(avatar, inicio, saida, vf=FIT):
     """
     _run(["-ss", f"{inicio:.3f}", "-i", str(avatar), "-an", "-vf", vf,
           "-frames:v", str(quadros(DISSOLVE)), *X264, str(saida)])
-
-
-def ultimo_quadro(segmento, dur, saida):
-    """O ultimo quadro de um bloco de video, pra servir de fonte da cauda.
-
-    Le' o SEGMENTO ja' renderizado, nao o clipe original. O clipe original pode ser
-    mais curto que o bloco (por isso o -stream_loop na hora de gerar), e ai' o -ss
-    caia depois do fim do arquivo: nao saia quadro nenhum, o ffmpeg dava erro, e a
-    dissolvencia era descartada em silencio pelo except la' embaixo. O segmento tem
-    exatamente a duracao do bloco, entao esse seek sempre acerta.
-    """
-    _run(["-ss", f"{max(0.0, dur - 0.05):.3f}", "-i", str(segmento),
-          "-frames:v", "1", "-q:v", "2", str(saida)])
 
 
 # O fade tem que zerar NO ULTIMO QUADRO da cauda, nao em DISSOLVE segundos. A cauda
@@ -310,13 +290,6 @@ def seg_imagem(img, dur, saida, variacao=0):
     # o zoom parava em 84% do percurso — dai' o pulo de 48px na troca de bloco.
     _run(["-framerate", str(FPS), "-loop", "1", "-t", f"{dur:.3f}", "-i", str(img),
           "-vf", vf, "-frames:v", str(q), *X264, str(saida)])
-
-
-def seg_video(clipe, dur, saida, vf=None):
-    # -stream_loop repete o clipe se ele for mais curto que o bloco
-    _run(["-stream_loop", "-1", "-i", str(clipe), "-an",
-          "-vf", vf or encaixe(clipe),
-          "-frames:v", str(quadros(dur)), *X264, str(saida)])
 
 
 # A capa nao para depois de cair: fica boiando. Amplitude pequena e periodo longo de
@@ -461,12 +434,30 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
                 # colorida de erro: o avatar sempre existe e parece intencional.
                 t["como"] = "avatar"
                 faltaram += 1
-            elif clipe.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            else:
                 t.update(como="imagem", arquivo=clipe, imagem=True, variacao=variacao)
                 variacao += 1
-            else:
-                t.update(como="video", arquivo=clipe)
         tarefas.append(t)
+
+    # ---- 1b. blocos de card seguidos viram UM segmento ----
+    # Eles sao o mesmo anuncio. Renderizados separados, a animacao de entrada (a capa
+    # caindo, o texto em fade, a seta) recomecava do zero no meio do anuncio e aparecia
+    # como um piscar. Juntando, ela toca uma vez e o cartao fica parado o resto do tempo.
+    # A soma das duracoes e' exata: cada uma e' q/FPS com q inteiro vindo da posicao
+    # absoluta, entao somar nao introduz arredondamento.
+    juntas, i = [], 0
+    while i < len(tarefas):
+        t = tarefas[i]
+        if t["como"] == "card":
+            j = i + 1
+            while j < len(tarefas) and tarefas[j]["como"] == "card":
+                t["dur"] += tarefas[j]["dur"]
+                j += 1
+            i = j
+        else:
+            i += 1
+        juntas.append(t)
+    tarefas = juntas
 
     # ---- 2. os blocos, em paralelo ----
     feitos = [0]
@@ -476,10 +467,8 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
             seg_card(camadas, t["dur"], t["seg"])
         elif t["como"] == "avatar":
             seg_avatar(avatar, t["start"], t["dur"], t["seg"], vf_avatar)
-        elif t["como"] == "imagem":
-            seg_imagem(t["arquivo"], t["dur"], t["seg"], t["variacao"])
         else:
-            seg_video(t["arquivo"], t["dur"], t["seg"])
+            seg_imagem(t["arquivo"], t["dur"], t["seg"], t["variacao"])
         feitos[0] += 1
         if on_status and feitos[0] % 5 == 0:
             on_status(f"montando bloco {feitos[0]} de {total}…")
@@ -522,16 +511,8 @@ def montar(plano_json, avatar, audio, clipes, saida, canal=None, tmp=None,
                     cauda_avatar(avatar, ant["start"] + ant["dur"],
                                  base.with_suffix(".mp4"), vf_avatar)
                 else:
-                    if ant["como"] == "imagem":
-                        fonte, parado = ant["arquivo"], False
-                    else:                   # clipe: usa o ultimo quadro dele, parado
-                        fonte, parado = base.with_suffix(".jpg"), True
-                        # ant["seg"] e' o original, escrito na fase 2 e nunca mais
-                        # tocado. ant["final"] pode estar sendo escrito agora por
-                        # outra emenda.
-                        ultimo_quadro(ant["seg"], ant["dur"], fonte)
-                    cauda(fonte, ant["dur"], ant.get("variacao", 0),
-                          base.with_suffix(".mp4"), parado=parado)
+                    cauda(ant["arquivo"], ant["dur"], ant.get("variacao", 0),
+                          base.with_suffix(".mp4"))
                 emendar(base.with_suffix(".mp4"), t["seg"], saida)
                 t["final"] = saida
             except Exception:

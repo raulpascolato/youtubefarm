@@ -24,33 +24,43 @@ VAZIO = {"presets": [], "canais": [], "videos": []}
 # normal, sem anuncio e sem card. As cores sao as do card de referencia.
 PRODUTO_VAZIO = {
     "produto_nome": "",
-    "produto_desc": "",
     "produto_site": "",
     "produto_capa": "",        # arquivo em data/capas/
     "cor_fundo": "#7A3320",
     "cor_destaque": "#E3A63C",
 }
 
-# So' os tres dados que a IA inventava diferente a cada video. Sao exatamente os que dao
-# pra tirar de uma FOTO do personagem, que e' como a ficha e' preenchida: o usuario copia
-# o modelo, anexa o avatar no Claude e cola a resposta de volta aqui.
-# Profissao NAO entra: nao da' pra deduzir de uma foto, e vem do molde sozinha — nos 3
-# roteiros do canal de referencia o bloco de profissao e' identico palavra por palavra.
+# A ficha sai do E-BOOK do canal: o usuario copia o pedido (botao "Copiar modelo pro
+# Claude"), anexa o PDF no Claude e cola a resposta de volta aqui. O narrador dos videos
+# e' o autor do livro, e quem compra le' a historia dele — se o roteiro inventasse outra
+# familia (a IA trocava a mae do livro por uma avo inventada), o comprador percebia.
+# A linha "Familia e historia" NAO termina em ":" de proposito: o bloco_personagem do
+# roteirista descarta linha que termina em ":" (campo do modelo deixado em branco).
 # O idioma entra na FICHA, nao so' no cadastro do canal: a ficha e' o que voce cola
 # no projeto do Claude que escreve as descricoes, e la' fora ele nao tem acesso ao
 # cadastro. Sem essa linha ele ficava adivinhando o idioma pelo roteiro.
 MODELO_PERSONAGEM = """Idioma:
 Nome:
 Idade:
-Onde ele mora / a região:"""
+Onde ele mora / a região:
+Família e história — a mesma do e-book do canal, não invente outra
+- (um fato por linha)"""
 
 CONFIG_PADRAO = {
-    "anthropic_key": "",
     "darkplanner_key": "",
-    "modelo": "claude-opus-5",
-    # medido de verdade: um roteiro de 19.189 chars virou 1418s de narração = 812 chars/min.
-    # O chute inicial era 1100 e entregava 23min pra um pedido de 16.
-    "chars_por_minuto": 810,
+    # nome do modelo no Claude Code (lista em claude_code.MODELOS)
+    # "modelo" escreve o roteiro e a descricao; "modelo_direcao" escreve os prompts de
+    # imagem. Separados porque a direcao e' a que mais gasta (o video inteiro, em lotes)
+    # e pede menos do modelo do que o roteiro.
+    "modelo": "claude-opus-5-5",
+    "modelo_direcao": "claude-sonnet-5-5",
+    # Padrao pra canal que ainda nao tem video montado. Medido nos 3 videos publicados do
+    # Alois (voz alema, pausas aparadas): 16.794 chars -> 15:58, 16.734 -> 15:49,
+    # 16.697 -> 15:44 = ~1.060 chars/min. O valor antigo (810, medido com outra voz e sem
+    # aparar) fazia um pedido de 20 min virar ~15 min.
+    # Depois do 1o video montado, cada canal passa a usar o que a voz DELE mede de verdade
+    # (canal["chars_por_minuto"], atualizado pelo server a cada montagem).
+    "chars_por_minuto": 1060,
     "port": 8777,
 }
 
@@ -77,6 +87,8 @@ class Store:
         for k, v in VAZIO.items():
             self.db.setdefault(k, list(v))
         self.cfg = self._ler(CONFIG, CONFIG_PADRAO)
+        # o app nao usa mais a API: a chave antiga sai do arquivo de configuracao
+        self.cfg.pop("anthropic_key", None)
         for k, v in CONFIG_PADRAO.items():
             self.cfg.setdefault(k, v)
         self._gravar(CONFIG, self.cfg)
@@ -115,15 +127,20 @@ class Store:
             return dict(self.cfg)
 
     # ---------- presets ----------
-    def presets(self):
+    # Dois tipos de modelo: "roteiro" (roteiros de treino da narracao) e "descricao"
+    # (descricoes de video de exemplo). O arquivo e' o mesmo formato nos dois — a lista
+    # fica em "roteiros" por compatibilidade. Modelo antigo, sem tipo, e' de roteiro.
+    def presets(self, tipo=None):
         with self._lock:
-            return list(self.db["presets"])
+            ps = [dict(p, tipo=p.get("tipo") or "roteiro") for p in self.db["presets"]]
+            return [p for p in ps if tipo is None or p["tipo"] == tipo]
 
     def preset(self, pid):
         with self._lock:
-            return next((p for p in self.db["presets"] if p["id"] == pid), None)
+            p = next((p for p in self.db["presets"] if p["id"] == pid), None)
+            return dict(p, tipo=p.get("tipo") or "roteiro") if p else None
 
-    def add_preset(self, nome, roteiros, arquivo_origem=""):
+    def add_preset(self, nome, roteiros, arquivo_origem="", tipo="roteiro"):
         """roteiros = lista de {titulo, texto} ja normalizada pelo roteirista."""
         with self._lock:
             pid = _id()
@@ -132,6 +149,7 @@ class Store:
             p = {
                 "id": pid,
                 "nome": nome.strip(),
+                "tipo": tipo,
                 "arquivo": nome_arq,
                 "origem": arquivo_origem,
                 "n_roteiros": len(roteiros),
@@ -157,7 +175,8 @@ class Store:
             p = self.preset(pid)
             if not p:
                 return False
-            if any(c.get("preset_id") == pid for c in self.db["canais"]):
+            if any(pid in (c.get("preset_id"), c.get("preset_desc_id"))
+                   for c in self.db["canais"]):
                 return "em-uso"
             try:
                 (PRESETS_DIR / p["arquivo"]).unlink()
@@ -176,6 +195,7 @@ class Store:
                 p = self.preset(c.get("preset_id"))
                 c["preset_nome"] = p["nome"] if p else "(modelo removido)"
                 c["n_videos"] = sum(1 for v in self.db["videos"] if v["canal_id"] == c["id"])
+                c.setdefault("preset_desc_id", "")
                 out.append(c)
             return out
 
@@ -187,6 +207,7 @@ class Store:
             c = dict(c)
             p = self.preset(c.get("preset_id"))
             c["preset_nome"] = p["nome"] if p else "(modelo removido)"
+            c.setdefault("preset_desc_id", "")
             return c
 
     def add_canal(self, nome, idioma, preset_id):
@@ -196,6 +217,7 @@ class Store:
                 "nome": nome.strip(),
                 "idioma": idioma.strip(),
                 "preset_id": preset_id,
+                "preset_desc_id": "",  # modelo de descricao; vazio = o video sai sem descricao
                 "voz_id": "",          # escolhida depois, na tela do canal
                 "voz_nome": "",
                 "personagem": "",      # quem narra: preenchido pelo MODELO_PERSONAGEM
@@ -207,8 +229,11 @@ class Store:
             return c
 
     def editar_canal(self, cid, campos):
-        """So mexe nos campos editaveis — nunca no id, preset ou data."""
-        editaveis = {"nome", "idioma", "voz_id", "voz_nome", "personagem", *PRODUTO_VAZIO}
+        """So mexe nos campos editaveis — nunca no id ou na data.
+        Os modelos (de roteiro e de descricao) podem trocar a qualquer hora: so' valem pro
+        que for gerado depois, nao mexem em nada ja' feito."""
+        editaveis = {"nome", "idioma", "voz_id", "voz_nome", "personagem", "preset_id",
+                     "preset_desc_id", "chars_por_minuto", *PRODUTO_VAZIO}
         with self._lock:
             c = next((x for x in self.db["canais"] if x["id"] == cid), None)
             if not c:
@@ -289,6 +314,10 @@ class Store:
                 "montagem_erro": "",
                 "montagem_saida": "",
                 "montagem_faltaram": 0,   # blocos sem imagem que o avatar cobriu
+                # etapa final: a descricao do YouTube, pelo modelo de descricao do canal
+                "descricao_estado": "nao",  # nao | gerando | pronto | erro
+                "descricao": "",
+                "descricao_erro": "",
                 "criado_em": _agora(),
             }
             self.db["videos"].append(v)
@@ -307,7 +336,9 @@ class Store:
                     or campos.get("audio_estado") in ("pronto", "erro", "gerando")
                     or campos.get("direcao_estado") in ("pronto", "erro", "gerando")
                     or campos.get("montagem_estado") in ("pronto", "erro", "montando")
-                    or "avatar_path" in campos or "pasta_dark" in campos):
+                    or campos.get("descricao_estado") in ("pronto", "erro", "gerando")
+                    or "avatar_path" in campos or "pasta_dark" in campos
+                    or "salvo_em" in campos):
                 self.salvar()
             return dict(v)
 

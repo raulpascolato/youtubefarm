@@ -5,7 +5,7 @@ title YOUTUBE FARM
 REM ---------------- caminho rapido ----------------
 REM .pronto guarda o caminho do pythonw depois que as dependencias foram conferidas
 REM uma vez. Sem esse cache, conferir os imports custa 6,2 SEGUNDOS a cada abertura
-REM (medido) — e o app importa tudo de novo logo em seguida, entao era tempo jogado
+REM (medido) ï¿½ e o app importa tudo de novo logo em seguida, entao era tempo jogado
 REM fora. Com o cache, o .bat nao chama o Python nenhuma vez antes de abrir.
 if not exist ".pronto" goto conferir
 set "PYW="
@@ -34,7 +34,7 @@ if not defined PY (
   exit /b 1
 )
 
-%PY% -c "import fastapi,uvicorn,webview,anthropic,PIL" >nul 2>&1
+%PY% -c "import fastapi,uvicorn,webview,PIL" >nul 2>&1
 if %errorlevel%==0 goto guardar
 
 echo.

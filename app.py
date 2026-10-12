@@ -122,6 +122,24 @@ class Janela:
             return True
         return False
 
+    def salvar_video(self, origem, nome=""):
+        """'Salvar como' NATIVO do Windows pro video pronto. Copia SO' o mp4 final pra
+        onde a pessoa escolher; os arquivos de trabalho ficam dentro do app.
+        Devolve o caminho salvo, ou '' se cancelou."""
+        if not self._win or not origem or not Path(origem).is_file():
+            return ""
+        r = self._win.create_file_dialog(webview.SAVE_DIALOG,
+                                         save_filename=nome or Path(origem).name,
+                                         file_types=("Vídeo (*.mp4)", "Todos (*.*)"))
+        destino = (r[0] if isinstance(r, (list, tuple)) and r else r) or ""
+        if not destino:
+            return ""
+        if not destino.lower().endswith(".mp4"):
+            destino += ".mp4"
+        import shutil
+        shutil.copy2(origem, destino)
+        return destino
+
     def escolher_pasta(self):
         if not self._win:
             return ""
@@ -180,7 +198,8 @@ def main():
 
 # os modulos que fazem parte do app — se um deles falta, e' arquivo, nao dependencia
 MEUS = {"app", "server", "montador", "roteirista", "diretor", "estilo",
-        "card", "store", "tts", "caminhos", "janela_win32", "versao"}
+        "card", "store", "tts", "caminhos", "janela_win32", "versao",
+        "claude_code", "descricao", "fala"}
 
 
 def _diagnostico(detalhe):
