@@ -140,6 +140,15 @@ class Janela:
         shutil.copy2(origem, destino)
         return destino
 
+    def mostrar_arquivo(self, caminho):
+        """Abre o Explorer na pasta do arquivo, com ele ja' selecionado."""
+        p = Path(caminho or "")
+        if not caminho or not p.exists():
+            return False
+        import subprocess
+        subprocess.Popen(f'explorer /select,"{p.resolve()}"')
+        return True
+
     def escolher_pasta(self):
         if not self._win:
             return ""

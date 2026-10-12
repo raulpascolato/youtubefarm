@@ -17,7 +17,7 @@ const DURACOES = [16, 17, 18, 19, 20];
 const EXEMPLO_CARD = "https://postimg.cc/NycMRpb1";
 
 /* onde o avatar é feito: o app só abre o site, o resto é na conta da pessoa */
-const HEYGEN = "https://app.heygen.com/home";
+const HEYGEN = "https://app.heygen.com/create-v4";
 
 /* abre FORA da janela: um link comum trocaria a interface do app pela página */
 function abrirLink(url) {
@@ -719,6 +719,13 @@ function blocoMontagem(v) {
         </div>
         <div class="row-valor">abrir ↗</div>
       </button>
+      <button class="row" onclick="abrirPastaAudio()">
+        <div class="row-corpo">
+          <div class="row-titulo">Abrir pasta do áudio</div>
+          <div class="row-sub">${v.audio_path ? esc(nome(v.audio_path)) : "o áudio pra mandar pro HeyGen"}</div>
+        </div>
+        <div class="row-valor">abrir</div>
+      </button>
       <button class="row" onclick="anexarAvatar()">
         <div class="row-corpo">
           <div class="row-titulo">${v.avatar_path ? "✓ Avatar anexado" : "Anexar avatar"}</div>
@@ -794,6 +801,13 @@ function talvezPerguntarSalvar(antes, depois) {
   if (antes?.montagem_estado !== "montando" || perguntouSalvar.has(depois.id)) return;
   perguntouSalvar.add(depois.id);
   setTimeout(salvarVideo, 300);
+}
+
+/* abre o Explorer com o áudio já selecionado, pronto pra arrastar pro HeyGen */
+async function abrirPastaAudio() {
+  if (!nativo()) return toast("só funciona na janela do app");
+  const ok = await window.pywebview.api.mostrar_arquivo(st.video?.audio_path || "");
+  if (!ok) toast("não achei o áudio desse vídeo");
 }
 
 async function anexarAvatar() {
