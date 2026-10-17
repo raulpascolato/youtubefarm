@@ -45,18 +45,24 @@ class ErroClaude(RuntimeError):
 def executavel():
     """O claude.exe de verdade. O claude.cmd do npm passa os argumentos pelo cmd.exe,
     que estraga aspas — e o --json-schema e' cheio delas."""
+    real = Path("node_modules") / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
     candidatos = [
         os.environ.get("CLAUDE_CODE_EXE", ""),
-        str(Path(os.environ.get("APPDATA", "")) / "npm" / "node_modules" / "@anthropic-ai"
-            / "claude-code" / "bin" / "claude.exe"),
-        str(Path.home() / ".local" / "bin" / "claude.exe"),
+        str(Path(os.environ.get("APPDATA", "")) / "npm" / real),
+        str(Path.home() / ".local" / "bin" / "claude.exe"),      # instalador oficial
+        str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "claude" / "claude.exe"),
         shutil.which("claude.exe") or "",
-        shutil.which("claude") or "",
     ]
+    # npm com outra pasta (nvm, prefixo trocado): o "claude" do PATH e' um .cmd; o exe
+    # de verdade fica do lado, dentro do node_modules
+    cmd = shutil.which("claude") or ""
+    if cmd:
+        candidatos.append(str(Path(cmd).parent / real))
     for c in candidatos:
         if c and Path(c).is_file():
             return c
-    return None
+    # ultimo recurso: o .cmd mesmo. Funciona; so' o --json-schema pode sofrer com aspas
+    return cmd if cmd and Path(cmd).is_file() else None
 
 
 def modelo_cli(modelo):

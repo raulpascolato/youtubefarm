@@ -17,6 +17,7 @@ from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
 from fastapi.staticfiles import StaticFiles
 
 import caminhos
+import card
 import claude_code
 import descricao
 import diretor
@@ -38,9 +39,9 @@ STATIC = dir_app() / "static"
 store = Store()
 app = FastAPI(title="YOUTUBE FARM")
 
-# faixa unica de duracao do canal. Nao e' configuravel de proposito: o roteiro so' sai
-# bom nessa janela, e deixar o usuario pedir 45min so' rendia roteiro estufado.
-DUR_MIN, DUR_MAX = 16, 20
+# duracoes que o app aceita (as mesmas do botao no front). Nao e' livre de proposito:
+# deixar o usuario pedir 45min so' rendia roteiro estufado.
+DURACOES = (8, 12, 16, 17, 18, 19, 20)
 
 
 def erro(msg, code=400):
@@ -374,7 +375,7 @@ def listar_vozes(q: str = "", genero: str = "", idioma: str = "",
     if q:
         vs = [v for v in vs if q in (v.get("name") or "").lower()]
 
-    iso = ISO.get((idioma or "").strip().lower(), "")
+    iso = card.iso(idioma)
     if iso:
         no_idioma = [v for v in vs if iso in _idiomas(v)]
         sem_info = [v for v in vs if not _idiomas(v)]
@@ -408,7 +409,7 @@ def preview_voz(vid: str, idioma: str = ""):
         v = next((x for x in _vozes() if x.get("id") == vid), None)
         if not v:
             return erro("voz não encontrada.", 404)
-        url = _preview_url(v, ISO.get((idioma or "").strip().lower(), ""))
+        url = _preview_url(v, card.iso(idioma))
         if not url:
             return erro("essa voz não tem preview.", 404)
         dados, tipo = tts.preview_bytes(url)
@@ -484,8 +485,8 @@ def criar_video(body: dict = Body(...)):
         return erro("escreve o título do vídeo.")
 
     # o roteiro e' sempre escrito pelo Claude Code: nao existe mais "colar roteiro pronto"
-    if not (DUR_MIN <= dur <= DUR_MAX):
-        return erro(f"a duração tem que ser entre {DUR_MIN} e {DUR_MAX} minutos.")
+    if dur not in DURACOES:
+        return erro("a duração tem que ser " + ", ".join(map(str, DURACOES)) + " minutos.")
 
     cfg = store.get_cfg()
     falta = claude_code.pronto()
@@ -543,11 +544,13 @@ def criar_audio(vid: str):
 def _gerar_audio(vid, v, canal, cfg, pasta):
     try:
         pasta.mkdir(parents=True, exist_ok=True)
+        # o link vai pra voz do jeito que se FALA, senao ela soletra o https
+        falado = tts.link_falado(v["roteiro"], canal.get("idioma", ""))
         # o roteiro tambem fica na pasta: e' o que voce leva pro HeyGen depois
-        (pasta / "roteiro.txt").write_text(v["roteiro"], encoding="utf-8")
+        (pasta / "roteiro.txt").write_text(falado, encoding="utf-8")
         r = tts.gerar_e_baixar(
             key=cfg["darkplanner_key"],
-            texto=v["roteiro"],
+            texto=falado,
             voice_id=canal["voz_id"],
             pasta=pasta,
             titulo=v["titulo"],
@@ -831,6 +834,8 @@ def criar_descricao(vid: str):
     if motivo:
         return erro(motivo)
     return store.video(vid)
+
+
 
 
 @app.get("/api/videos/{vid}/prompts")

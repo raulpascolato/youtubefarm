@@ -311,7 +311,27 @@ def montar_plano(blocos, decisoes):
                       "qr": False,
                       "arquivo": (f'bloco_{b["n"]:03d}.jpg' if tipo == "imagem" else
                                   "card_produto.png" if tipo == "card" else "")})
+    _esticar_card(plano)
     return plano
+
+
+def _esticar_card(plano):
+    """Garante o cartao CARD_ALVO_S na tela. Se o anuncio falado foi curto, o cartao
+    continua por cima dos blocos seguintes ate' fechar o tempo. Mede como o montador
+    corta: do inicio do 1o bloco de card ate' o inicio do bloco depois do ultimo.
+    Nunca pega o ultimo bloco do video (o fechamento e' do avatar)."""
+    cards = [i for i, p in enumerate(plano) if p["tipo"] == "card"]
+    if not cards:
+        return
+    a, z = cards[0], cards[-1]
+
+    def na_tela(z):
+        fim = plano[z + 1]["start"] if z + 1 < len(plano) else plano[z]["end"]
+        return float(fim) - float(plano[a]["start"])
+
+    while na_tela(z) < estilo.CARD_ALVO_S and z + 1 < len(plano) - 1:
+        z += 1
+        plano[z].update(tipo="card", prompt_imagem="", arquivo="card_produto.png")
 
 
 # ---------------------------------------------------------------- saidas

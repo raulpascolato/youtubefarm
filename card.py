@@ -9,6 +9,7 @@ a capa entra caindo de cima enquanto o texto aparece em fade, um pouco atrasado.
   texto.png   so' o texto, transparente no resto
 """
 import io
+import re
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -24,7 +25,9 @@ TXT_TOPO = 0.270
 # Listas de tentativa: a 1a que existir na maquina vence. O app vai rodar no PC dos
 # outros, e nao da' pra empacotar Georgia/Segoe junto (sao fontes licenciadas da
 # Microsoft) — entao a saida e' ter alternativa.
-F = "C:/Windows/Fonts/"
+import os
+# a pasta de fontes do Windows, mesmo que ele nao esteja no C:
+F = os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts") + "/"
 SERIF = [F + "georgiab.ttf", F + "timesbd.ttf", F + "constanb.ttf", F + "arialbd.ttf"]
 SANS = [F + "segoeui.ttf", F + "calibri.ttf", F + "arial.ttf", F + "tahoma.ttf"]
 SANS_BOLD = [F + "segoeuib.ttf", F + "calibrib.ttf", F + "arialbd.ttf", F + "tahomabd.ttf"]
@@ -86,6 +89,31 @@ ASSINATURA = {"en": "by", "pt": "por", "de": "von", "es": "por", "fr": "par",
               "pl": "", "fi": ""}
 
 
+def iso(idioma):
+    """Codigo de 2 letras do idioma do canal, do jeito que a pessoa tiver digitado:
+    "Alemão", "alemao", "Português (Brasil)", "pt-BR", "English"... '' se nao souber.
+    O campo e' texto livre; comparar exato fazia "Português do Brasil" virar ingles."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", (idioma or "").strip().lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    if not t:
+        return ""
+    sem_acento = {unicodedata.normalize("NFKD", k).encode("ascii", "ignore").decode(): v
+                  for k, v in IDIOMA.items()}
+    if t in sem_acento:
+        return sem_acento[t]
+    codigo = t.replace("_", "-").split("-")[0]
+    if len(codigo) == 2 and codigo in KICKER:          # "pt-br", "de", "en_us"
+        return codigo
+    for palavra in t.replace("(", " ").replace(")", " ").replace("-", " ").split():
+        if palavra in sem_acento:                       # "portugues do brasil"
+            return sem_acento[palavra]
+    for nome, v in sem_acento.items():                  # "alemao da austria"
+        if t.startswith(nome):
+            return v
+    return ""
+
+
 def _nome_da_ficha(personagem):
     """O 'Nome:' da ficha. A ficha e' texto livre, entao le' linha a linha."""
     for linha in (personagem or "").splitlines():
@@ -99,16 +127,16 @@ def assinatura(canal):
     nome = _nome_da_ficha((canal or {}).get("personagem"))
     if not nome:
         return ""
-    iso = IDIOMA.get(((canal or {}).get("idioma") or "").strip().lower(), "en")
-    return f"{ASSINATURA.get(iso, 'by')} {nome}".strip()
+    cod = iso((canal or {}).get("idioma")) or "en"
+    return f"{ASSINATURA.get(cod, 'by')} {nome}".strip()
 
 
 def kicker_do_idioma(idioma):
-    return KICKER.get(IDIOMA.get((idioma or "").strip().lower(), "en"), KICKER["en"])
+    return KICKER.get(iso(idioma) or "en", KICKER["en"])
 
 
 def escaneie_do_idioma(idioma):
-    return ESCANEIE.get(IDIOMA.get((idioma or "").strip().lower(), "en"), ESCANEIE["en"])
+    return ESCANEIE.get(iso(idioma) or "en", ESCANEIE["en"])
 
 
 def _rgb(h, padrao=(122, 51, 32)):
@@ -127,7 +155,10 @@ def _fonte(candidatas, tam):
             return ImageFont.truetype(c, tam)
         except OSError:
             continue
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default(size=tam)     # Pillow >= 10.1: fonte do tamanho certo
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def _largura(d, txt, f):
@@ -208,15 +239,40 @@ QR_MARGEM_D, QR_MARGEM_B = 80, 76
 QR_VAO, QR_LEGENDA = 26, 24        # espaco ate' a legenda e altura dela
 
 
+def _segno():
+    """A biblioteca do QR. Se faltar, instala na hora: numa maquina que instalou o app
+    antes do segno entrar no requirements, o .bat nunca mais conferia e o cartao saia
+    sem QR, calado."""
+    try:
+        import segno
+        return segno
+    except ImportError:
+        pass
+    import subprocess
+    import sys
+    py = Path(sys.executable)
+    if py.name.lower() == "pythonw.exe":       # o app roda sem console; o pip quer o python
+        py = py.with_name("python.exe")
+    try:
+        subprocess.run([str(py), "-m", "pip", "install", "--disable-pip-version-check",
+                        "segno>=1.6"], capture_output=True, timeout=180,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        import importlib
+        importlib.invalidate_caches()
+        import segno
+        return segno
+    except Exception:
+        return None
+
+
 def _camada_qr(site, destaque):
     """O QR do site, com a legenda embaixo. Devolve None se nao der pra gerar.
 
     Fundo claro e modulos escuros, nao o contrario: leitor de celular espera essa
     polaridade, e invertido muita camera simplesmente nao engata.
     """
-    try:
-        import segno
-    except ImportError:
+    segno = _segno()
+    if segno is None:
         return None                # sem a biblioteca o card sai sem QR, e nao quebra
     endereco = site if "://" in site else "https://" + site
     try:
@@ -236,7 +292,7 @@ def _colar_qr(camada, site, destaque, idioma):
     """Cola o QR e a legenda no canto de baixo a direita da camada de texto."""
     desenho = _camada_qr(site, destaque)
     if desenho is None:
-        return
+        return False
     x = L - QR_MARGEM_D - QR_LADO
     y = A - QR_MARGEM_B - QR_LEGENDA - QR_VAO - QR_LADO
     # uma moldura clara atras, pra o QR nao encostar no fundo escuro e perder contraste
@@ -249,6 +305,7 @@ def _colar_qr(camada, site, destaque, idioma):
     larg = d.textlength(texto, font=f)
     d.text((x + (QR_LADO - larg) / 2, y + QR_LADO + QR_VAO), texto, font=f,
            fill=destaque + (255,))
+    return True
 
 
 def _camada_seta(destaque):
@@ -325,14 +382,16 @@ def montar(pasta, canal, tamanho=(L, A)):
         nome,
         # nao existe mais descricao manual do produto: e' sempre a assinatura automatica
         assinatura(canal),
-        site,
+        # na tela, o endereco curto (bit.ly/x); o QR continua com o link completo
+        re.sub(r"^(https?://)?(www\.)?", "", site, flags=re.I).rstrip("/"),
         destaque,
         tem_capa,
     )
     # o QR entra na mesma camada do texto: assim ele aparece junto, no mesmo fade
-    _colar_qr(texto, site, destaque, canal.get("idioma"))
-    # a seta e' camada SEPARADA porque o montador a balanca; o resto fica parado
-    seta = _camada_seta(destaque)
+    tem_qr = _colar_qr(texto, site, destaque, canal.get("idioma"))
+    # a seta e' camada SEPARADA porque o montador a balanca; o resto fica parado.
+    # Sem QR ela apontaria pro nada: sai transparente.
+    seta = _camada_seta(destaque) if tem_qr else Image.new("RGBA", (L, A), (0, 0, 0, 0))
     saidas = {}
     for chave, img in (("fundo", fundo), ("capa", capa), ("texto", texto),
                        ("seta", seta)):

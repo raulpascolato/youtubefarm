@@ -10,6 +10,7 @@ Fluxo: generate (job_id) -> status (poll ate completed) -> download (urls) -> ba
 Auth: header X-API-Key com a chave dpk_...
 """
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -23,6 +24,47 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 class TTSError(Exception):
     pass
+
+
+# A voz le' o link do jeito que esta' escrito: "https://..." saia soletrado, letra por
+# letra. Antes de narrar, todo endereco vira o jeito que uma pessoa fala:
+# "https://www.wachstuchheft.com/livro" -> "wachstuchheft Punkt com".
+# Link encurtado (bit.ly/...) nao funciona sem o caminho: ai' o caminho e' falado junto,
+# "bit ponto ly barra tesouroesquecido".
+FALA = {"de": ("Punkt", "Schrägstrich"), "en": ("dot", "slash"), "pt": ("ponto", "barra"),
+        "es": ("punto", "barra"), "it": ("punto", "slash"), "fr": ("point", "slash"),
+        "nl": ("punt", "slash"), "pl": ("kropka", "ukośnik"), "sv": ("punkt", "snedstreck"),
+        "da": ("punktum", "skråstreg"), "no": ("punktum", "skråstrek"),
+        "fi": ("piste", "kauttaviiva")}
+
+# sem https/www na frente, so' conta como link se terminar num destes
+TLDS = {"com", "de", "net", "org", "br", "io", "shop", "store", "info", "co", "at", "ch",
+        "it", "eu", "online", "site", "ly", "ee", "me", "gl", "gd", "to", "tv", "app",
+        "link", "page", "us", "uk", "pt", "es", "fr", "nl", "be", "pl"}
+ENCURTADORES = ("bit.ly", "tinyurl.com", "linktr.ee", "cutt.ly", "t.ly", "is.gd",
+                "rebrand.ly", "encurtador.com.br", "shorturl.at", "goo.gl")
+
+_LINK = re.compile(
+    r"(https?\s*:\s*/\s*/\s*)?(www\.)?"
+    r"((?:[a-z0-9-]+\.)+[a-z]{2,10})\b"
+    r"(/[^\s,;!?)\"»“”]*[^\s.,;!?)\"»“”/])?/?",
+    re.I)
+
+
+def link_falado(texto, idioma=""):
+    import card                       # o mesmo leitor de idioma do cartao
+    ponto, barra = FALA.get(card.iso(idioma), FALA["en"])
+
+    def falar(m):
+        prot, www, dominio, caminho = m.groups()
+        if not (prot or www) and dominio.rsplit(".", 1)[-1].lower() not in TLDS:
+            return m.group(0)                    # "ca.", "z.B." etc: nao e' link
+        dito = f" {ponto} ".join(dominio.split("."))
+        if caminho and dominio.lower() in ENCURTADORES:
+            dito += f" {barra} " + f" {barra} ".join(c for c in caminho.split("/") if c)
+        return dito
+
+    return _LINK.sub(falar, texto or "")
 
 
 def _req(url, key=None, metodo="GET", corpo=None, timeout=60):

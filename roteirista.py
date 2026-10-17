@@ -289,12 +289,18 @@ os roteiros de treino fazem e reproduza o mecanismo:
 1. Um motivo humano pra ter criado aquilo — alguém pediu, o conhecimento ia se perder,
    cansou de repetir a mesma resposta. Nunca "eu criei um produto incrível".
 2. Uma piada com ele mesmo ou uma farpa carinhosa em alguém. Tira o cheiro de venda.
-3. O nome do produto, dito com naturalidade, e onde achar: "{site}".
+3. O nome do produto, dito com naturalidade, e onde achar: "{site}". Escreva o
+   endereço exatamente assim: nunca "https://" e nunca "www" na frente. Isso vai ser
+   FALADO por uma voz.
    Durante o anúncio inteiro aparece na tela um cartão com a capa, o endereço e um
-   QR CODE, e ele fica uns dez segundos — o tempo de alguém pegar o telefone e
-   enquadrar o código. Então escreva o anúncio PARA esses dez segundos: diga o nome,
+   QR CODE, e ele fica {seg} SEGUNDOS — o tempo de alguém pegar o telefone e
+   enquadrar o código. Então escreva o anúncio PARA esses {seg} segundos: diga o nome,
    diga o endereço, e só então mande apontar a câmera do celular pro código que está
    na tela, ou pegar o link na descrição.
+   TAMANHO: do momento em que ele diz o nome do produto até o fim do anúncio (antes
+   do "voltando"), escreva PELO MENOS {chars} caracteres — é isso que dá {seg}
+   segundos de fala. Menos que isso e o cartão some antes de dar tempo. Preencha com
+   o que o produto TEM de concreto ligado a este vídeo, nunca repetindo o endereço.
    Não amontoe as três coisas numa frase só nem jogue o "aponta o celular" como
    remendo no fim. Sem insistir, e sem repetir o endereço depois.
 4. Saída rápida. Uma frase curta e volta pro assunto ("Enfim, voltando").
@@ -356,13 +362,19 @@ def montar_treino(roteiros):
     return usados or ordenados[:1]
 
 
-def bloco_produto(canal):
+def bloco_produto(canal, cpm=1060):
     """Escolhe qual das duas instruções entra no prompt."""
     nome = (canal or {}).get("produto_nome", "").strip()
     site = (canal or {}).get("produto_site", "").strip()
     if not (nome and site):
         return SEM_PRODUTO
-    return COM_PRODUTO.format(nome=nome, site=site)
+    import estilo
+    # no roteiro o endereco entra curto: e' texto pra ser FALADO, nao pra clicar
+    site = re.sub(r"^(https?://)?(www\.)?", "", site, flags=re.I).rstrip("/")
+    seg = int(estilo.CARD_ALVO_S)
+    # o trecho do cartao tem que DURAR na fala: segundos -> caracteres no ritmo do canal
+    return COM_PRODUTO.format(nome=nome, site=site, seg=seg,
+                              chars=round(cpm * seg / 60 / 10) * 10)
 
 
 CHECAGEM = """Leia o roteiro abaixo e extraia UM fato: o narrador anuncia um produto
@@ -554,7 +566,8 @@ def gerar_roteiro(modelo, titulo, dur_min, idioma, roteiros, alvo_chars,
                            minimo=int(alvo_chars * 0.85),
                            maximo=int(alvo_chars * 1.10),
                            cpm=round(alvo_chars / max(1, dur_min)), dur=dur_min,
-                           corpo=corpo, produto=bloco_produto(canal),
+                           corpo=corpo,
+                           produto=bloco_produto(canal, round(alvo_chars / max(1, dur_min))),
                            personagem=bloco_personagem(canal))
     user = USER.format(titulo=titulo, dur=dur_min, alvo=alvo_chars, idioma=idioma)
 

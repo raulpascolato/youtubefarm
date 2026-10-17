@@ -3,13 +3,13 @@ cd /d "%~dp0"
 title YOUTUBE FARM
 
 REM ---------------- caminho rapido ----------------
-REM .pronto guarda o caminho do pythonw depois que as dependencias foram conferidas
+REM .pronto2 guarda o caminho do pythonw depois que as dependencias foram conferidas
 REM uma vez. Sem esse cache, conferir os imports custa 6,2 SEGUNDOS a cada abertura
 REM (medido) � e o app importa tudo de novo logo em seguida, entao era tempo jogado
 REM fora. Com o cache, o .bat nao chama o Python nenhuma vez antes de abrir.
-if not exist ".pronto" goto conferir
+if not exist ".pronto2" goto conferir
 set "PYW="
-set /p PYW=<.pronto
+set /p PYW=<.pronto2
 if not exist "%PYW%" goto conferir
 start "" "%PYW%" app.py
 exit /b 0
@@ -34,7 +34,7 @@ if not defined PY (
   exit /b 1
 )
 
-%PY% -c "import fastapi,uvicorn,webview,PIL" >nul 2>&1
+%PY% -c "import fastapi,uvicorn,webview,PIL,segno" >nul 2>&1
 if %errorlevel%==0 goto guardar
 
 echo.
@@ -55,12 +55,14 @@ echo   Pronto. Abrindo o app...
 
 :guardar
 REM pythonw = sem janela preta; a janela do app e' a interface.
+REM .pronto2 (nao .pronto): trocar o nome forca quem ja' tinha o app a conferir de novo
+REM as dependencias uma vez - foi assim que faltou o segno (QR) em outra maquina.
 set "PYW="
 for /f "usebackq delims=" %%P in (`%PY% -c "import sys,os;print(os.path.join(os.path.dirname(sys.executable),'pythonw.exe'))"`) do set "PYW=%%P"
 if not exist "%PYW%" (
   start "" %PY% app.py
   exit /b 0
 )
->.pronto echo %PYW%
+>.pronto2 echo %PYW%
 start "" "%PYW%" app.py
 exit /b 0

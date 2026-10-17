@@ -24,8 +24,9 @@ AVATAR_MAX_S = 15
 # Quanto tempo o cartao do produto fica na tela. Nao e' gosto: o cartao traz um QR, e
 # quem esta' vendo precisa pegar o celular, abrir a camera e enquadrar. Medido num video
 # real, o anuncio caiu em tres blocos do SRT e o cartao ficou 3,3s — nao da' pra ninguem.
-# Dez segundos e' o minimo pra alguem conseguir ler o codigo sem pausar o video.
-CARD_ALVO_S = 10
+# Dez segundos era o minimo; o usuario pediu 15 (2026-10-16). O roteiro escreve o
+# anuncio pra durar isso e a direcao estica o cartao pros blocos seguintes se faltar.
+CARD_ALVO_S = 15
 
 # Tamanho dos pedacos em que a narracao e' picada (vai pro DarkPlanner junto com o audio).
 # Cada pedaco e' uma cena: e' esse numero que decide de quanto em quanto tempo a tela muda.

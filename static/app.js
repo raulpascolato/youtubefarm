@@ -11,7 +11,7 @@ const IDIOMAS = ["Português", "Inglês", "Alemão", "Espanhol", "Francês",
                  "Norueguês", "Finlandês"];
 
 /* faixa fixa de duração — o app nunca escreve fora disso (o servidor também barra) */
-const DURACOES = [16, 17, 18, 19, 20];
+const DURACOES = [8, 12, 16, 17, 18, 19, 20];
 
 /* como o card fica montado, pra pessoa ver antes de preencher os campos */
 const EXEMPLO_CARD = "https://postimg.cc/NycMRpb1";
@@ -438,7 +438,7 @@ function sheetNovoVideo() {
     </div>
     <div class="group-label">Duração</div>
     <div class="segmented" id="nv-dur">
-      ${DURACOES.map((m, i) => `<button class="seg ${i === 0 ? "ativo" : ""}"
+      ${DURACOES.map(m => `<button class="seg ${m === 16 ? "ativo" : ""}"
         data-v="${m}">${m}</button>`).join("")}
     </div>`,
     async () => {

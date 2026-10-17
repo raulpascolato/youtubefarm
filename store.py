@@ -336,8 +336,7 @@ class Store:
                     or campos.get("audio_estado") in ("pronto", "erro", "gerando")
                     or campos.get("direcao_estado") in ("pronto", "erro", "gerando")
                     or campos.get("montagem_estado") in ("pronto", "erro", "montando")
-                    or campos.get("descricao_estado") in ("pronto", "erro", "gerando")
-                    or "avatar_path" in campos or "pasta_dark" in campos
+                    or campos.get("descricao_estado") in ("pronto", "erro", "gerando")                    or "avatar_path" in campos or "pasta_dark" in campos
                     or "salvo_em" in campos):
                 self.salvar()
             return dict(v)
